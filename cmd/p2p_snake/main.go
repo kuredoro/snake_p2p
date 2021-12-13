@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -34,7 +36,7 @@ func drawInitialBox(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style) {
 	// Fill background
 	for row := y1; row <= y2; row++ {
 		for col := x1; col <= x2; col++ {
-			s.SetContent(col, row, '*', nil, style)
+			s.SetContent(col, row, tcell.RuneBullet, nil, style)
 		}
 	}
 
@@ -59,10 +61,52 @@ func drawInitialBox(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style) {
 	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
+type Pos struct {
+	x, y int
+}
+
+type Snake struct {
+	id    int         // snake id
+	body  []Pos       // coordinates of snake's body
+	head  Pos         // coordinates of snake's head
+	style tcell.Style // snake's style
+}
+
+type Boundary struct {
+	x1, y1, x2, y2 int
+}
+
+// TODO: add out of boundary error handling
+func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) {
+	s.SetContent(snake.head.x, snake.head.y, tcell.RuneBullet, nil, snake.style)
+	for _, p := range snake.body {
+		s.SetContent(p.x, p.y, tcell.RuneBlock, nil, snake.style)
+	}
+}
+
+func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
+	color := tcell.PaletteColor(rand.Intn(256))
+	_, ok := defColors[color]
+	for ok == true {
+		color = tcell.PaletteColor(rand.Intn(256))
+		_, ok = defColors[color]
+	}
+	return color
+}
+
+func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
+	style := tcell.StyleDefault.Foreground(getRandColor(defColors)).Background(getRandColor(defColors))
+	return style
+}
+
 func main() {
+	rand.Seed(time.Now().UnixNano())
+	defColors := make(map[tcell.Color]struct{})
 	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
-
+	defColors[tcell.ColorReset] = struct{}{}
+	defColors[tcell.ColorWhite] = struct{}{}
+	defColors[tcell.ColorPurple] = struct{}{}
 	// Initialize screen
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -79,7 +123,11 @@ func main() {
 	// Draw initial boxes
 	drawInitialBox(s, 1, 1, 81, 41, boxStyle)
 	//drawBox(s, 5, 9, 32, 14, boxStyle, "Press C to reset")
-
+	snake := Snake{id: 0,
+		head:  Pos{4, 5},
+		body:  []Pos{{5, 5}, {6, 5}},
+		style: genSnakeStyle(defColors)}
+	drawSnake(s, snake, Boundary{1, 1, 81, 41})
 	// Event loop
 	//ox, oy := -1, -1
 	quit := func() {
