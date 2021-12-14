@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	. "github.com/kuredoro/snake_p2p/core"
 )
 
 func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string) {
@@ -27,8 +28,8 @@ func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string
 }
 
 func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
-	x1, y1 := boundary.topLeft.x, boundary.topLeft.y
-	x2, y2 := boundary.bottomRight.x, boundary.bottomRight.y
+	x1, y1 := boundary.topLeft.X, boundary.topLeft.Y
+	x2, y2 := boundary.bottomRight.X, boundary.bottomRight.Y
 	if y2 < y1 {
 		y1, y2 = y2, y1
 	}
@@ -64,10 +65,6 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-type Coord struct {
-	x, y int
-}
-
 type Snake struct {
 	id    int         // snake id
 	body  []Coord     // coordinates of snake's body
@@ -81,20 +78,20 @@ type Boundary struct {
 }
 
 func (boundary Boundary) Contains(coord Coord) bool {
-	return (coord.x <= boundary.topLeft.x || coord.x >= boundary.bottomRight.x) ||
-		(coord.y <= boundary.topLeft.y || coord.y >= boundary.bottomRight.y)
+	return (coord.X <= boundary.topLeft.X || coord.X >= boundary.bottomRight.X) ||
+		(coord.Y <= boundary.topLeft.Y || coord.Y >= boundary.bottomRight.Y)
 }
 
 func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
 	if boundary.Contains(snake.head) {
 		return fmt.Errorf("snake's head coordinates are out of boundary")
 	}
-	s.SetContent(snake.head.x, snake.head.y, tcell.RuneBullet, nil, snake.style)
+	s.SetContent(snake.head.X, snake.head.Y, tcell.RuneBullet, nil, snake.style)
 	for _, point := range snake.body {
 		if boundary.Contains(point) {
 			return fmt.Errorf("snake's body coordinates are out of boundary")
 		}
-		s.SetContent(point.x, point.y, tcell.RuneBlock, nil, snake.style)
+		s.SetContent(point.X, point.Y, tcell.RuneBlock, nil, snake.style)
 	}
 	return nil
 }
@@ -103,7 +100,7 @@ func drawFood(s tcell.Screen, food Coord, style tcell.Style, boundary Boundary) 
 	if boundary.Contains(food) {
 		return fmt.Errorf("food coordinates are out of boundary")
 	}
-	s.SetContent(food.x, food.y, '*', nil, style)
+	s.SetContent(food.X, food.Y, '*', nil, style)
 	return nil
 }
 
@@ -111,7 +108,7 @@ func drawGridCell(s tcell.Screen, cell Coord, style tcell.Style, boundary Bounda
 	if boundary.Contains(cell) {
 		return fmt.Errorf("cell is out of boundary")
 	}
-	s.SetContent(cell.x, cell.y, tcell.RuneBullet, nil, style)
+	s.SetContent(cell.X, cell.Y, tcell.RuneBullet, nil, style)
 	return nil
 }
 
@@ -213,28 +210,6 @@ func main() {
 			if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
 				quit()
 			}
-			//else if ev.Key() == tcell.KeyCtrlL {
-			//	s.Sync()
-			//} else if ev.Rune() == 'C' || ev.Rune() == 'c' {
-			//	s.Clear()
-			//}
-			//case *tcell.EventMouse:
-			//	x, y := ev.Position()
-			//	button := ev.Buttons()
-			//	// Only process button events, not wheel events
-			//	button &= tcell.ButtonMask(0xff)
-			//
-			//	if button != tcell.ButtonNone && ox < 0 {
-			//		ox, oy = x, y
-			//	}
-			//	switch ev.Buttons() {
-			//	case tcell.ButtonNone:
-			//		if ox >= 0 {
-			//			label := fmt.Sprintf("%d,%d to %d,%d", ox, oy, x, y)
-			//			drawBox(s, ox, oy, x, y, boxStyle, label)
-			//			ox, oy = -1, -1
-			//		}
-			//	}
 		}
 	}
 }
