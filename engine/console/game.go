@@ -18,10 +18,10 @@ type Snake struct {
 }
 
 type Game struct {
-	ch chan interface{}			// communication channel
-	snakes []Snake				// snakes' state: alive snakes with ID, head and body coordinates
-	food []core.Coord			// food state: coordinates of food on the field
-	numAliveSnakes int 			// number of alive snakes in the game
+	Ch             chan interface{} // communication channel
+	snakes         []Snake          // snakes' state: alive snakes with ID, head and body coordinates
+	food           []core.Coord     // food state: coordinates of food on the field
+	numAliveSnakes int              // number of alive snakes in the game
 }
 
 type Boundary struct {
@@ -188,7 +188,7 @@ func (game *Game) RunGame() {
 protocolEvents:
 		for {
 			select {
-			case event, ok := <- (*game).ch:
+			case event, ok := <- (*game).Ch:
 				if !ok {
 					panic("Channel is closed")
 				}
