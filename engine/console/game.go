@@ -8,15 +8,16 @@ import (
 )
 
 type Snake struct {
-	id    int         // snakep2p id
-	body  []core.Coord     // coordinates of snakep2p's body
-	head  core.Coord       // coordinates of snakep2p's head
-	style tcell.Style // snakep2p's style
+	id    int         		// snakep2p id
+	body  []core.Coord     	// coordinates of snakep2p's body
+	head  core.Coord      	// coordinates of snakep2p's head
+	style tcell.Style 		// snakep2p's style
 }
 
 type Game struct {
 	snakes []Snake
 	food []core.Coord
+	numAliveSnakes int
 }
 
 type Boundary struct {
@@ -126,4 +127,24 @@ func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
 func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
 	style := tcell.StyleDefault.Foreground(getRandColor(defColors)).Background(getRandColor(defColors))
 	return style
+}
+
+var defColors = map[tcell.Color]struct{}{
+	tcell.ColorReset: {},
+	tcell.ColorWhite: {},
+	tcell.ColorPurple: {},
+	tcell.ColorRed: {},
+}
+
+func (game *Game) handleGameEvent(event interface{}) {
+	switch event := event.(type) {
+	case core.PlayerStarts:
+		(*game).numAliveSnakes = len(event.Players)
+		for id, start := range event.Players {
+			(*game).snakes = append((*game).snakes, Snake{id: id, head: start, style: genSnakeStyle(defColors)})
+		}
+	case core.NewFood:
+		(*game).food = append((*game).food, event.Pos)
+	case core.Tick:
+	}
 }
