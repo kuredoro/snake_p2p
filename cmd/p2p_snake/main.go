@@ -80,15 +80,18 @@ type Boundary struct {
 	bottomRight Coord
 }
 
+func (boundary Boundary) Contains(coord Coord) bool {
+	return (coord.x <= boundary.topLeft.x || coord.x >= boundary.bottomRight.x) ||
+		(coord.y <= boundary.topLeft.y || coord.y >= boundary.bottomRight.y)
+}
+
 func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
-	if (snake.head.x <= boundary.topLeft.x || snake.head.x >= boundary.bottomRight.x) ||
-		(snake.head.y <= boundary.topLeft.y || snake.head.y >= boundary.bottomRight.y) {
+	if boundary.Contains(snake.head) {
 		return fmt.Errorf("snake's head coordinates are out of boundary")
 	}
 	s.SetContent(snake.head.x, snake.head.y, tcell.RuneBullet, nil, snake.style)
 	for _, point := range snake.body {
-		if (point.x <= boundary.topLeft.x || point.x >= boundary.bottomRight.x) ||
-			(point.y <= boundary.topLeft.y || point.y >= boundary.bottomRight.y) {
+		if boundary.Contains(point) {
 			return fmt.Errorf("snake's body coordinates are out of boundary")
 		}
 		s.SetContent(point.x, point.y, tcell.RuneBlock, nil, snake.style)
@@ -97,8 +100,7 @@ func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
 }
 
 func drawFood(s tcell.Screen, food Coord, style tcell.Style, boundary Boundary) error {
-	if (food.x <= boundary.topLeft.x || food.x >= boundary.bottomRight.x) ||
-		(food.y <= boundary.topLeft.y || food.y >= boundary.bottomRight.y) {
+	if boundary.Contains(food) {
 		return fmt.Errorf("food coordinates are out of boundary")
 	}
 	s.SetContent(food.x, food.y, '*', nil, style)
