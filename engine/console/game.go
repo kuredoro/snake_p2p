@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kuredoro/snake_p2p/core"
+	"log"
 	"math/rand"
+	"os"
+	"time"
 )
 
 type Snake struct {
@@ -15,9 +18,10 @@ type Snake struct {
 }
 
 type Game struct {
-	snakes []Snake
-	food []core.Coord
-	numAliveSnakes int
+	ch chan interface{}			// communication channel
+	snakes []Snake				// snakes' state: alive snakes with ID, head and body coordinates
+	food []core.Coord			// food state: coordinates of food on the field
+	numAliveSnakes int 			// number of alive snakes in the game
 }
 
 type Boundary struct {
@@ -146,5 +150,82 @@ func (game *Game) handleGameEvent(event interface{}) {
 	case core.NewFood:
 		(*game).food = append((*game).food, event.Pos)
 	case core.Tick:
+	}
+}
+
+func (game *Game) RunGame() {
+	// Define Game styles
+	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
+	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
+	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
+
+	// Define Game field
+	boundary := Boundary{core.Coord{1, 1}, core.Coord{81, 41}}
+
+	// Initialize Game Screen
+	s, err := tcell.NewScreen()
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	if err := s.Init(); err != nil {
+		log.Fatalf("%+v", err)
+	}
+	s.EnableMouse()
+	s.EnablePaste()
+	s.Clear()
+	s.SetStyle(defStyle)
+
+	// Define function to quit the Game
+	quit := func() {
+		s.Fini()
+		os.Exit(0)
+	}
+
+	// Game loop
+	for {
+		after := time.After(20 * time.Millisecond)  		// update Game Screen every 20 milliseconds
+		// Process Game event
+protocolEvents:
+		for {
+			select {
+			case event, ok := <- (*game).ch:
+				if !ok {
+					panic("Channel is closed")
+				}
+
+				(*game).handleGameEvent(event)
+			case <-after:
+				break protocolEvents
+			}
+		}
+
+		// Poll event
+		ev := s.PollEvent()
+		// Process event
+		switch ev := ev.(type) {
+		case *tcell.EventResize:
+			s.Sync()
+		case *tcell.EventKey:
+			if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
+				quit()
+			}
+		}
+
+		// Draw Game state
+		drawInitialBox(s, boundary, boxStyle)
+		for _, snake := range (*game).snakes {
+			err := drawSnake(s, snake, boundary)
+			if err != nil {
+				log.Fatalf("%+v", err)
+			}
+		}
+		for _, f := range (*game).food {
+			err := drawFood(s, f, foodStyle, boundary)
+			if err != nil {
+				println(err)
+				log.Fatalf("%+v", err)
+			}
+		}
+		s.Show()
 	}
 }
