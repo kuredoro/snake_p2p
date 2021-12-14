@@ -107,6 +107,14 @@ func drawFood(s tcell.Screen, food Coord, style tcell.Style, boundary Boundary) 
 	return nil
 }
 
+func drawGridCell(s tcell.Screen, cell Coord, style tcell.Style, boundary Boundary) error {
+	if boundary.Contains(cell) {
+		return fmt.Errorf("cell is out of boundary")
+	}
+	s.SetContent(cell.x, cell.y, tcell.RuneBullet, nil, style)
+	return nil
+}
+
 func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
 	color := tcell.PaletteColor(rand.Intn(256))
 	_, ok := defColors[color]
@@ -148,7 +156,7 @@ func main() {
 	// Draw initial grid
 	boundary := Boundary{Coord{1, 1}, Coord{81, 41}}
 	drawInitialBox(s, boundary, boxStyle)
-	//drawBox(s, 5, 9, 32, 14, boxStyle, "Press C to reset")
+	// Draw snakes
 	snake1 := Snake{id: 0,
 		head:  Coord{4, 5},
 		body:  []Coord{{5, 5}, {6, 5}},
@@ -165,6 +173,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("%+v", err)
 	}
+	// new food
 	food1 := Coord{20, 24}
 	food2 := Coord{23, 35}
 	err = drawFood(s, food1, foodStyle, boundary)
@@ -172,6 +181,13 @@ func main() {
 		log.Fatalf("%+v", err)
 	}
 	err = drawFood(s, food2, foodStyle, boundary)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	s.Show()
+	// food is eaten
+	time.Sleep(10 * time.Second)
+	err = drawGridCell(s, food1, boxStyle, boundary)
 	if err != nil {
 		log.Fatalf("%+v", err)
 	}
