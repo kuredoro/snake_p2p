@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -25,7 +26,9 @@ func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string
 	}
 }
 
-func drawInitialBox(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style) {
+func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
+	x1, y1 := boundary.topLeft.x, boundary.topLeft.y
+	x2, y2 := boundary.bottomRight.x, boundary.bottomRight.y
 	if y2 < y1 {
 		y1, y2 = y2, y1
 	}
@@ -61,27 +64,45 @@ func drawInitialBox(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style) {
 	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-type Pos struct {
+type Coord struct {
 	x, y int
 }
 
 type Snake struct {
 	id    int         // snake id
-	body  []Pos       // coordinates of snake's body
-	head  Pos         // coordinates of snake's head
+	body  []Coord     // coordinates of snake's body
+	head  Coord       // coordinates of snake's head
 	style tcell.Style // snake's style
 }
 
 type Boundary struct {
-	x1, y1, x2, y2 int
+	topLeft     Coord
+	bottomRight Coord
 }
 
-// TODO: add out of boundary error handling
-func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) {
-	s.SetContent(snake.head.x, snake.head.y, tcell.RuneBullet, nil, snake.style)
-	for _, p := range snake.body {
-		s.SetContent(p.x, p.y, tcell.RuneBlock, nil, snake.style)
+func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
+	if (snake.head.x <= boundary.topLeft.x || snake.head.x >= boundary.bottomRight.x) ||
+		(snake.head.y <= boundary.topLeft.y || snake.head.y >= boundary.bottomRight.y) {
+		return fmt.Errorf("snake's head coordinates are out of boundary")
 	}
+	s.SetContent(snake.head.x, snake.head.y, tcell.RuneBullet, nil, snake.style)
+	for _, point := range snake.body {
+		if (point.x <= boundary.topLeft.x || point.x >= boundary.bottomRight.x) ||
+			(point.y <= boundary.topLeft.y || point.y >= boundary.bottomRight.y) {
+			return fmt.Errorf("snake's body coordinates are out of boundary")
+		}
+		s.SetContent(point.x, point.y, tcell.RuneBlock, nil, snake.style)
+	}
+	return nil
+}
+
+func drawFood(s tcell.Screen, food Coord, style tcell.Style, boundary Boundary) error {
+	if (food.x <= boundary.topLeft.x || food.x >= boundary.bottomRight.x) ||
+		(food.y <= boundary.topLeft.y || food.y >= boundary.bottomRight.y) {
+		return fmt.Errorf("food coordinates are out of boundary")
+	}
+	s.SetContent(food.x, food.y, '*', nil, style)
+	return nil
 }
 
 func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
@@ -104,9 +125,11 @@ func main() {
 	defColors := make(map[tcell.Color]struct{})
 	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
+	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
 	defColors[tcell.ColorReset] = struct{}{}
 	defColors[tcell.ColorWhite] = struct{}{}
 	defColors[tcell.ColorPurple] = struct{}{}
+	defColors[tcell.ColorRed] = struct{}{}
 	// Initialize screen
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -120,14 +143,36 @@ func main() {
 	s.EnablePaste()
 	s.Clear()
 
-	// Draw initial boxes
-	drawInitialBox(s, 1, 1, 81, 41, boxStyle)
+	// Draw initial grid
+	boundary := Boundary{Coord{1, 1}, Coord{81, 41}}
+	drawInitialBox(s, boundary, boxStyle)
 	//drawBox(s, 5, 9, 32, 14, boxStyle, "Press C to reset")
-	snake := Snake{id: 0,
-		head:  Pos{4, 5},
-		body:  []Pos{{5, 5}, {6, 5}},
+	snake1 := Snake{id: 0,
+		head:  Coord{4, 5},
+		body:  []Coord{{5, 5}, {6, 5}},
 		style: genSnakeStyle(defColors)}
-	drawSnake(s, snake, Boundary{1, 1, 81, 41})
+	snake2 := Snake{id: 0,
+		head:  Coord{12, 15},
+		body:  []Coord{{12, 14}, {12, 13}},
+		style: genSnakeStyle(defColors)}
+	err = drawSnake(s, snake1, boundary)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	err = drawSnake(s, snake2, boundary)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	food1 := Coord{20, 24}
+	food2 := Coord{23, 35}
+	err = drawFood(s, food1, foodStyle, boundary)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	err = drawFood(s, food2, foodStyle, boundary)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
 	// Event loop
 	//ox, oy := -1, -1
 	quit := func() {
