@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
     pubsub "github.com/libp2p/go-libp2p-pubsub"
+    "github.com/i582/cfmt/cmd/cfmt"
 )
 
 const SendEvery = time.Second
@@ -26,14 +27,16 @@ func main() {
 
     h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
     if err != nil {
-        panic(err)
+        printErr("init node:", err)
+        os.Exit(1)
     }
     defer h.Close()
     fmt.Println("ok")
 
     // Set up mDNS discovery
     if err := setupDiscovery(h); err != nil {
-        panic(err)
+        printErr("setup discovery:", err)
+        os.Exit(1)
     }
     fmt.Println("Now listening")
 
@@ -41,7 +44,8 @@ func main() {
     ctx := context.Background()
     ps, err := pubsub.NewGossipSub(ctx, h)
     if err != nil {
-        panic(err)
+        printErr("enable pubsub:", err)
+        os.Exit(1)
     }
 
     tag := *tagFlag
@@ -52,7 +56,8 @@ func main() {
     fmt.Print("Joining the network...")
     m, err := JoinNetwork(ctx, ps, h.ID(), tag)
     if err != nil {
-        panic(err)
+        printErr("join the network:", err)
+        os.Exit(1)
     }
     fmt.Println("ok")
 
@@ -104,12 +109,12 @@ type NetworkMember struct {
 func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfID peer.ID, tag string) (*NetworkMember, error) {
     topic, err := ps.Join("snake_test")
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("join topic %q: %v", "snake_test", topic)
     }
 
     sub, err := topic.Subscribe()
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("subscribe to %v: %v", topic, err)
     }
 
     nm := &NetworkMember{
@@ -130,6 +135,7 @@ func (nm *NetworkMember) readLoop() {
     for {
         psMsg, err := nm.sub.Next(nm.ctx)
         if err != nil {
+            printErr("receive next message:", err)
             close(nm.Messages)
             return
         }
@@ -140,6 +146,7 @@ func (nm *NetworkMember) readLoop() {
 
         msg := &Message{}
         if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
+            cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unmarshal %q\n", string(psMsg.Data))
             continue
         }
 
@@ -155,8 +162,28 @@ func (nm *NetworkMember) Publish(timestamp time.Time) error {
 
     msgBytes, err := json.Marshal(msg)
     if err != nil {
-        return err
+        return fmt.Errorf("marshal: %v", err)
     }
 
-    return nm.topic.Publish(nm.ctx, msgBytes)
+    err = nm.topic.Publish(nm.ctx, msgBytes)
+    if err != nil {
+        return fmt.Errorf("publish: %v", err)
+    }
+
+    return nil
+}
+
+func printErr(m string, args ...interface{}) {
+    if len(args) == 0 {
+        panic("printErr: no arguments passed")
+    }
+
+    err := args[len(args)-1]
+
+    header := m
+    if len(args) > 1 {
+        header = fmt.Sprintf(m, args[:len(args)-1])
+    }
+
+    cfmt.Printf("{{error:}}::lightRed|bold %s %v\n", header, err)
 }
