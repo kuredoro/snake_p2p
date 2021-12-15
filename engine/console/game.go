@@ -187,7 +187,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 			}
 		}
 		game.Food[idx] = game.Food[len(game.Food) - 1]
-		game.Food[len(game.Food) - 1] = core.Coord{X: 0, Y: 0}
+		game.Food[len(game.Food) - 1] = core.Coord{}
 		game.Food = game.Food[0:len(game.Food) - 1]
 	case core.PushSegment:
 		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
