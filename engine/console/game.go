@@ -11,10 +11,10 @@ import (
 )
 
 type Snake struct {
-	id    int         		// snakep2p id
-	body  []core.Coord     	// coordinates of snakep2p's body
-	head  core.Coord      	// coordinates of snakep2p's head
-	style tcell.Style 		// snakep2p's style
+	id    int          // snakep2p id
+	body  []core.Coord // coordinates of snakep2p's body
+	head  core.Coord   // coordinates of snakep2p's head
+	style tcell.Style  // snakep2p's style
 }
 
 type Game struct {
@@ -134,21 +134,21 @@ func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
 }
 
 var defColors = map[tcell.Color]struct{}{
-	tcell.ColorReset: {},
-	tcell.ColorWhite: {},
+	tcell.ColorReset:  {},
+	tcell.ColorWhite:  {},
 	tcell.ColorPurple: {},
-	tcell.ColorRed: {},
+	tcell.ColorRed:    {},
 }
 
 func (game *Game) handleGameEvent(event interface{}) {
 	switch event := event.(type) {
 	case core.PlayerStarts:
-		(*game).numAliveSnakes = len(event.Players)
+		game.numAliveSnakes = len(event.Players)
 		for id, start := range event.Players {
-			(*game).snakes = append((*game).snakes, Snake{id: id, head: start, style: genSnakeStyle(defColors)})
+			game.snakes = append(game.snakes, Snake{id: id, head: start, style: genSnakeStyle(defColors)})
 		}
 	case core.NewFood:
-		(*game).food = append((*game).food, event.Pos)
+		game.food = append(game.food, event.Pos)
 	case core.Tick:
 	}
 }
@@ -183,17 +183,17 @@ func (game *Game) RunGame() {
 
 	// Game loop
 	for {
-		after := time.After(20 * time.Millisecond)  		// update Game Screen every 20 milliseconds
+		after := time.After(20 * time.Millisecond) // update Game Screen every 20 milliseconds
 		// Process Game event
-protocolEvents:
+	protocolEvents:
 		for {
 			select {
-			case event, ok := <- (*game).Ch:
+			case event, ok := <-game.Ch:
 				if !ok {
 					panic("Channel is closed")
 				}
 
-				(*game).handleGameEvent(event)
+				game.handleGameEvent(event)
 			case <-after:
 				break protocolEvents
 			}
@@ -213,13 +213,13 @@ protocolEvents:
 
 		// Draw Game state
 		drawInitialBox(s, boundary, boxStyle)
-		for _, snake := range (*game).snakes {
+		for _, snake := range game.snakes {
 			err := drawSnake(s, snake, boundary)
 			if err != nil {
 				log.Fatalf("%+v", err)
 			}
 		}
-		for _, f := range (*game).food {
+		for _, f := range game.food {
 			err := drawFood(s, f, foodStyle, boundary)
 			if err != nil {
 				println(err)
