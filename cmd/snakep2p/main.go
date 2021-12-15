@@ -20,19 +20,25 @@ func main() {
 	startPlayerPos[3] = core.Coord{X: 10, Y: 6}
 	game.Ch <- core.PlayerStarts{Players: startPlayerPos}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 10}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 2}}
 	game.Ch <- core.Tick{}
+	game.Ch <- core.FoodEaten{Pos: core.Coord{X: 5, Y: 2}}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Right,
 															 1: core.Left,
 															 2: core.Down,
 															 3: core.Up}}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 7, Y: 10}}
+	game.Ch <- core.PushSegment{ID: 0, Pos: core.Coord{X: 4, Y: 2}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 3}}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 10, Y: 10}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 10, Y: 4}}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Right,
-															 1: core.Left,
+	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
+															 1: core.Down,
 															 2: core.Down,
-															 3: core.Up}}
+															 3: core.Right}}
+	game.Ch <- core.FoodEaten{Pos: core.Coord{X: 5, Y: 3}}
+	game.Ch <- core.FoodEaten{Pos: core.Coord{X: 10, Y: 4}}
+	game.Ch <- core.PushSegment{ID: 0, Pos: core.Coord{X: 4, Y: 2}}
+	game.Ch <- core.PushSegment{ID: 2, Pos: core.Coord{X: 10, Y: 3}}
 	game.RunGame()
 }
