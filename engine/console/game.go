@@ -173,6 +173,17 @@ func (game *Game) handleGameEvent(event interface{}) {
 			}
 			game.snakes[id].body[0] = prevHead
 		}
+	case core.FoodEaten:
+		idx := 0
+		for i, food := range game.food {
+			if food.X == event.Pos.X && food.Y == event.Pos.Y {
+				idx = i
+				break
+			}
+		}
+		game.food[idx] = game.food[len(game.food) - 1]
+		game.food[len(game.food) - 1] = core.Coord{X: 0, Y: 0}
+		game.food = game.food[0:len(game.food) - 1]
 	case core.Tick:
 	}
 }
