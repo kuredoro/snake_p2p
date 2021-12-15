@@ -14,17 +14,25 @@ func main() {
 	game.Ch = make(chan interface{}, 100)
 	// Add events to channel
 	startPlayerPos := make(map[int]core.Coord)
-	startPlayerPos[0] = core.Coord{X: 5, Y: 2}
-	startPlayerPos[1] = core.Coord{X: 15, Y: 3}
-	startPlayerPos[2] = core.Coord{X: 25, Y: 14}
-	startPlayerPos[3] = core.Coord{X: 32, Y: 28}
+	startPlayerPos[0] = core.Coord{X: 4, Y: 2}
+	startPlayerPos[1] = core.Coord{X: 7, Y: 5}
+	startPlayerPos[2] = core.Coord{X: 10, Y: 2}
+	startPlayerPos[3] = core.Coord{X: 10, Y: 6}
 	game.Ch <- core.PlayerStarts{Players: startPlayerPos}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 18}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 10}}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 55, Y: 12}}
+	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Right,
+															 1: core.Left,
+															 2: core.Down,
+															 3: core.Up}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 7, Y: 10}}
 	game.Ch <- core.Tick{}
-	game.Ch <- core.NewFood{Pos: core.Coord{X: 15, Y: 10}}
+	game.Ch <- core.NewFood{Pos: core.Coord{X: 10, Y: 10}}
 	game.Ch <- core.Tick{}
+	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Right,
+															 1: core.Left,
+															 2: core.Down,
+															 3: core.Up}}
 	game.RunGame()
 }

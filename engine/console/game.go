@@ -90,7 +90,7 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 
 func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
 	if boundary.Contains(snake.head) {
-		return fmt.Errorf("snakep2p's head coordinates are out of boundary")
+		return fmt.Errorf("snakep2p's %d head coordinates are out of boundary", snake.id)
 	}
 	s.SetContent(snake.head.X, snake.head.Y, tcell.RuneBullet, nil, snake.style)
 	for _, point := range snake.body {
@@ -153,7 +153,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 		for id, dir := range event.Moves {
 			prevHead := game.snakes[id].head
 			// move snake's head
-			if dir == core.UP {
+			if dir == core.Up {
 				game.snakes[id].head = core.Coord{X: prevHead.X, Y: prevHead.Y - 1}
 			} else if dir == core.Left {
 				game.snakes[id].head = core.Coord{X: prevHead.X - 1, Y: prevHead.Y}
@@ -165,6 +165,9 @@ func (game *Game) handleGameEvent(event interface{}) {
 				panic("the value of direction is unknown")
 			}
 			// move snakes body
+			if len(game.snakes[id].body) == 0 {
+				continue
+			}
 			for i := len(game.snakes[id].body) - 1; i > 0; i -= 1 {
 				game.snakes[id].body[i] = game.snakes[id].body[i - 1]
 			}
@@ -181,7 +184,7 @@ func (game *Game) RunGame() {
 	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
 
 	// Define Game field
-	boundary := Boundary{core.Coord{1, 1}, core.Coord{81, 41}}
+	boundary := Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}}
 
 	// Initialize Game Screen
 	s, err := tcell.NewScreen()
