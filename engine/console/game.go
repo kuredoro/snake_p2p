@@ -13,7 +13,7 @@ import (
 )
 
 type Snake struct {
-	ID    int          // snakep2p id
+	alive bool         // whether snake is alive or not
 	Body  []core.Coord // coordinates of snakep2p's body
 	Head  core.Coord   // coordinates of snakep2p's head
 	Style tcell.Style  // snakep2p's style
@@ -92,7 +92,7 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 
 func drawSnake(s tcell.Screen, snake *Snake, boundary Boundary) error {
 	if boundary.Contains(snake.Head) {
-		return fmt.Errorf("snakep2p's %d head coordinates (%d, %d) are out of boundary", snake.ID, snake.Head.X, snake.Head.Y)
+		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
 	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneBullet, nil, snake.Style)
 	for _, point := range snake.Body {
@@ -148,7 +148,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 		game.NumAliveSnakes = len(event.Players)
 		game.Snakes = make(map[int]*Snake)
 		for id, start := range event.Players {
-			game.Snakes[id] = &Snake{ID: id, Head: start, Style: genSnakeStyle(defColors)}
+			game.Snakes[id] = &Snake{alive: true, Head: start, Style: genSnakeStyle(defColors)}
 		}
 	case core.NewFood:
 		game.Food = append(game.Food, event.Pos)
@@ -191,6 +191,8 @@ func (game *Game) handleGameEvent(event interface{}) {
 		game.Food = game.Food[0:len(game.Food) - 1]
 	case core.PushSegment:
 		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
+	case core.PlayerDied:
+		game.Snakes[event.ID].alive = false
 	case core.Tick:
 	}
 }
@@ -263,6 +265,9 @@ func (game *Game) RunGame() {
 		s.Clear()
 		drawInitialBox(s, boundary, boxStyle)
 		for _, snake := range game.Snakes {
+			if !snake.alive {
+				continue
+			}
 			err := drawSnake(s, snake, boundary)
 			if err != nil {
 				s.Fini()
