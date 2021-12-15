@@ -149,6 +149,27 @@ func (game *Game) handleGameEvent(event interface{}) {
 		}
 	case core.NewFood:
 		game.food = append(game.food, event.Pos)
+	case core.PlayerMove:
+		for id, dir := range event.Moves {
+			prevHead := game.snakes[id].head
+			// move snake's head
+			if dir == core.UP {
+				game.snakes[id].head = core.Coord{X: prevHead.X, Y: prevHead.Y - 1}
+			} else if dir == core.Left {
+				game.snakes[id].head = core.Coord{X: prevHead.X - 1, Y: prevHead.Y}
+			} else if dir == core.Right {
+				game.snakes[id].head = core.Coord{X: prevHead.X + 1, Y: prevHead.Y}
+			} else if dir == core.Down {
+				game.snakes[id].head = core.Coord{X: prevHead.X, Y: prevHead.Y + 1}
+			} else {
+				panic("the value of direction is unknown")
+			}
+			// move snakes body
+			for i := len(game.snakes[id].body) - 1; i > 0; i -= 1 {
+				game.snakes[id].body[i] = game.snakes[id].body[i - 1]
+			}
+			game.snakes[id].body[0] = prevHead
+		}
 	case core.Tick:
 	}
 }
