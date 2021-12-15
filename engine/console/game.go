@@ -8,30 +8,32 @@ import (
 	"math/rand"
 	"os"
 	"time"
+
+	//"github.com/sanity-io/litter"
 )
 
 type Snake struct {
-	id    int          // snakep2p id
-	body  []core.Coord // coordinates of snakep2p's body
-	head  core.Coord   // coordinates of snakep2p's head
-	style tcell.Style  // snakep2p's style
+	ID    int          // snakep2p id
+	Body  []core.Coord // coordinates of snakep2p's body
+	Head  core.Coord   // coordinates of snakep2p's head
+	Style tcell.Style  // snakep2p's style
 }
 
 type Game struct {
 	Ch             chan interface{} // communication channel
-	snakes         []Snake          // snakes' state: alive snakes with ID, head and body coordinates
-	food           []core.Coord     // food state: coordinates of food on the field
-	numAliveSnakes int              // number of alive snakes in the game
+	Snakes         map[int]*Snake          // snakes' state: alive snakes with ID, head and body coordinates
+	Food           []core.Coord     // food state: coordinates of food on the field
+	NumAliveSnakes int              // number of alive snakes in the game
 }
 
 type Boundary struct {
-	topLeft     core.Coord
-	bottomRight core.Coord
+	TopLeft     core.Coord
+	BottomRight core.Coord
 }
 
 func (boundary Boundary) Contains(coord core.Coord) bool {
-	return (coord.X <= boundary.topLeft.X || coord.X >= boundary.bottomRight.X) ||
-		(coord.Y <= boundary.topLeft.Y || coord.Y >= boundary.bottomRight.Y)
+	return (coord.X <= boundary.TopLeft.X || coord.X >= boundary.BottomRight.X) ||
+		(coord.Y <= boundary.TopLeft.Y || coord.Y >= boundary.BottomRight.Y)
 }
 
 func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string) {
@@ -51,8 +53,8 @@ func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string
 }
 
 func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
-	x1, y1 := boundary.topLeft.X, boundary.topLeft.Y
-	x2, y2 := boundary.bottomRight.X, boundary.bottomRight.Y
+	x1, y1 := boundary.TopLeft.X, boundary.TopLeft.Y
+	x2, y2 := boundary.BottomRight.X, boundary.BottomRight.Y
 	if y2 < y1 {
 		y1, y2 = y2, y1
 	}
@@ -88,16 +90,16 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
-	if boundary.Contains(snake.head) {
-		return fmt.Errorf("snakep2p's %d head coordinates (%d, %d) are out of boundary", snake.id, snake.head.X, snake.head.Y)
+func drawSnake(s tcell.Screen, snake *Snake, boundary Boundary) error {
+	if boundary.Contains(snake.Head) {
+		return fmt.Errorf("snakep2p's %d head coordinates (%d, %d) are out of boundary", snake.ID, snake.Head.X, snake.Head.Y)
 	}
-	s.SetContent(snake.head.X, snake.head.Y, tcell.RuneBullet, nil, snake.style)
-	for _, point := range snake.body {
+	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneBullet, nil, snake.Style)
+	for _, point := range snake.Body {
 		if boundary.Contains(point) {
 			return fmt.Errorf("snakep2p's body coordinates are out of boundary")
 		}
-		s.SetContent(point.X, point.Y, tcell.RuneBlock, nil, snake.style)
+		s.SetContent(point.X, point.Y, tcell.RuneBlock, nil, snake.Style)
 	}
 	return nil
 }
@@ -143,49 +145,52 @@ var defColors = map[tcell.Color]struct{}{
 func (game *Game) handleGameEvent(event interface{}) {
 	switch event := event.(type) {
 	case core.PlayerStarts:
-		game.numAliveSnakes = len(event.Players)
+		game.NumAliveSnakes = len(event.Players)
+		game.Snakes = make(map[int]*Snake)
 		for id, start := range event.Players {
-			game.snakes = append(game.snakes, Snake{id: id, head: start, style: genSnakeStyle(defColors)})
+			game.Snakes[id] = &Snake{ID: id, Head: start, Style: genSnakeStyle(defColors)}
 		}
 	case core.NewFood:
-		game.food = append(game.food, event.Pos)
+		game.Food = append(game.Food, event.Pos)
 	case core.PlayerMove:
 		for id, dir := range event.Moves {
-			prevHead := game.snakes[id].head
+			prevHead := game.Snakes[id].Head
 			// move snake's head
-			if dir == core.Up {
-				game.snakes[id].head = core.Coord{X: prevHead.X, Y: prevHead.Y - 1}
-			} else if dir == core.Left {
-				game.snakes[id].head = core.Coord{X: prevHead.X - 1, Y: prevHead.Y}
-			} else if dir == core.Right {
-				game.snakes[id].head = core.Coord{X: prevHead.X + 1, Y: prevHead.Y}
-			} else if dir == core.Down {
-				game.snakes[id].head = core.Coord{X: prevHead.X, Y: prevHead.Y + 1}
-			} else {
+			switch dir {
+			case core.Up:
+				game.Snakes[id].Head.Y--
+			case core.Left:
+				game.Snakes[id].Head.X--
+			case core.Right:
+				game.Snakes[id].Head.X++
+			case core.Down:
+				game.Snakes[id].Head.Y++
+			default:
 				panic("the value of direction is unknown")
 			}
+
 			// move snakes body
-			if len(game.snakes[id].body) == 0 {
+			if len(game.Snakes[id].Body) == 0 {
 				continue
 			}
-			for i := len(game.snakes[id].body) - 1; i > 0; i -= 1 {
-				game.snakes[id].body[i] = game.snakes[id].body[i - 1]
+			for i := len(game.Snakes[id].Body) - 1; i > 0; i-- {
+				game.Snakes[id].Body[i] = game.Snakes[id].Body[i - 1]
 			}
-			game.snakes[id].body[0] = prevHead
+			game.Snakes[id].Body[0] = prevHead
 		}
 	case core.FoodEaten:
 		idx := 0
-		for i, food := range game.food {
+		for i, food := range game.Food {
 			if food.X == event.Pos.X && food.Y == event.Pos.Y {
 				idx = i
 				break
 			}
 		}
-		game.food[idx] = game.food[len(game.food) - 1]
-		game.food[len(game.food) - 1] = core.Coord{X: 0, Y: 0}
-		game.food = game.food[0:len(game.food) - 1]
+		game.Food[idx] = game.Food[len(game.Food) - 1]
+		game.Food[len(game.Food) - 1] = core.Coord{X: 0, Y: 0}
+		game.Food = game.Food[0:len(game.Food) - 1]
 	case core.PushSegment:
-		game.snakes[event.ID].body = append(game.snakes[event.ID].body, event.Pos)
+		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
 	case core.Tick:
 	}
 }
@@ -227,10 +232,16 @@ func (game *Game) RunGame() {
 			select {
 			case event, ok := <-game.Ch:
 				if !ok {
+					//s.Fini()
 					panic("Channel is closed")
 				}
 
 				game.handleGameEvent(event)
+
+				/*
+				   fmt.Printf("EVENT %#v\n", event)
+				   litter.Dump(game)
+				*/
 			case <-after:
 				break protocolEvents
 			}
@@ -249,18 +260,23 @@ func (game *Game) RunGame() {
 		}
 
 		// Draw Game state
+		s.Clear()
 		drawInitialBox(s, boundary, boxStyle)
-		for _, snake := range game.snakes {
+		for _, snake := range game.Snakes {
 			err := drawSnake(s, snake, boundary)
 			if err != nil {
+				s.Fini()
 				log.Fatalf("%+v", err)
+				os.Exit(0)
 			}
 		}
-		for _, f := range game.food {
+		for _, f := range game.Food {
 			err := drawFood(s, f, foodStyle, boundary)
 			if err != nil {
-				println(err)
+				s.Fini()
+				fmt.Println(err)
 				log.Fatalf("%+v", err)
+				os.Exit(0)
 			}
 		}
 		s.Show()
