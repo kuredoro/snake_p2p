@@ -90,7 +90,7 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 
 func drawSnake(s tcell.Screen, snake Snake, boundary Boundary) error {
 	if boundary.Contains(snake.head) {
-		return fmt.Errorf("snakep2p's %d head coordinates are out of boundary", snake.id)
+		return fmt.Errorf("snakep2p's %d head coordinates (%d, %d) are out of boundary", snake.id, snake.head.X, snake.head.Y)
 	}
 	s.SetContent(snake.head.X, snake.head.Y, tcell.RuneBullet, nil, snake.style)
 	for _, point := range snake.body {
@@ -184,6 +184,8 @@ func (game *Game) handleGameEvent(event interface{}) {
 		game.food[idx] = game.food[len(game.food) - 1]
 		game.food[len(game.food) - 1] = core.Coord{X: 0, Y: 0}
 		game.food = game.food[0:len(game.food) - 1]
+	case core.PushSegment:
+		game.snakes[event.ID].body = append(game.snakes[event.ID].body, event.Pos)
 	case core.Tick:
 	}
 }
