@@ -41,10 +41,11 @@ func main() {
 	game.Ch <- core.PushSegment{ID: 0, Pos: core.Coord{X: 4, Y: 2}}
 	game.Ch <- core.PushSegment{ID: 2, Pos: core.Coord{X: 10, Y: 3}}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
-		1: core.Right,
-		2: core.Down,
-		3: core.Left}}
+															 1: core.Right,
+															 2: core.Down,
+															 3: core.Left}}
 	game.Ch <- core.PlayerDied{ID: 2}
 	game.Ch <- core.PlayerDied{ID: 3}
+	game.Ch <- core.GameOver{Successful: true, Winner: 0}
 	game.RunGame()
 }
