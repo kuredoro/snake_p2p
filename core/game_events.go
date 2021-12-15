@@ -29,8 +29,12 @@ type PlayerDied struct {
 }
 
 type FoodEaten struct {
-	ID int     // ID of player who ate food
 	Pos Coord  // coordinates of eaten food
+}
+
+type PushSegment struct {
+	ID int		// ID of snake
+	Pos Coord	// coordinates of a cell to add to a snake
 }
 
 type Tick struct{}
