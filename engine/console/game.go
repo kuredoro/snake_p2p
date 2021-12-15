@@ -90,11 +90,12 @@ func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-func drawSnake(s tcell.Screen, snake *Snake, boundary Boundary) error {
+func drawSnake(s tcell.Screen, ID int, snake *Snake, boundary Boundary) error {
 	if boundary.Contains(snake.Head) {
 		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
-	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneBullet, nil, snake.Style)
+	var id = []rune(strconv.Itoa(ID))
+	s.SetContent(snake.Head.X, snake.Head.Y, id[0], nil, snake.Style)
 	for _, point := range snake.Body {
 		if boundary.Contains(point) {
 			return fmt.Errorf("snakep2p's body coordinates are out of boundary")
@@ -264,11 +265,11 @@ func (game *Game) RunGame() {
 		// Draw Game state
 		s.Clear()
 		drawInitialBox(s, boundary, boxStyle)
-		for _, snake := range game.Snakes {
+		for id, snake := range game.Snakes {
 			if !snake.alive {
 				continue
 			}
-			err := drawSnake(s, snake, boundary)
+			err := drawSnake(s, id, snake, boundary)
 			if err != nil {
 				s.Fini()
 				log.Fatalf("%+v", err)
