@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	//"github.com/sanity-io/litter"
@@ -21,9 +22,11 @@ type Snake struct {
 
 type Game struct {
 	Ch             chan interface{} // communication channel
-	Snakes         map[int]*Snake          // snakes' state: alive snakes with ID, head and body coordinates
+	Snakes         map[int]*Snake   // snakes' state: alive snakes with ID, head and body coordinates
 	Food           []core.Coord     // food state: coordinates of food on the field
 	NumAliveSnakes int              // number of alive snakes in the game
+	Over 	   bool				// whether game is over or not
+	Winner 		   int				// ID of the player who won the game
 }
 
 type Boundary struct {
@@ -52,7 +55,7 @@ func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string
 	}
 }
 
-func drawInitialBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
+func drawBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	x1, y1 := boundary.TopLeft.X, boundary.TopLeft.Y
 	x2, y2 := boundary.BottomRight.X, boundary.BottomRight.Y
 	if y2 < y1 {
@@ -194,6 +197,13 @@ func (game *Game) handleGameEvent(event interface{}) {
 		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
 	case core.PlayerDied:
 		game.Snakes[event.ID].alive = false
+	case core.GameOver:
+		game.Over = true
+		if event.Successful {
+			game.Winner = event.Winner
+		} else {
+			game.Winner = -1
+		}
 	case core.Tick:
 	}
 }
@@ -202,6 +212,7 @@ func (game *Game) RunGame() {
 	// Define Game styles
 	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
+	blackBoxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
 
 	// Define Game field
@@ -264,7 +275,28 @@ func (game *Game) RunGame() {
 
 		// Draw Game state
 		s.Clear()
-		drawInitialBox(s, boundary, boxStyle)
+		if game.Over {
+			drawBox(s, boundary, boxStyle)
+			width, height := 12, 0
+			if game.Winner != -1 {
+				height = 4
+			} else {
+				height = 2
+			}
+			x1 := (boundary.BottomRight.X - boundary.TopLeft.X - width) / 2
+			y1 := (boundary.BottomRight.Y - boundary.TopLeft.Y - height) / 2
+			x2 := (boundary.BottomRight.X - boundary.TopLeft.X + width) / 2
+			y2 := (boundary.BottomRight.Y - boundary.TopLeft.Y + height) / 2
+			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
+			drawText(s, x1 + 1, y1 + 1, x2 - 1, y2 - 1, blackBoxStyle, "Game Over")
+			if game.Winner != -1 {
+				text := "Winner " + strconv.Itoa(game.Winner)
+				drawText(s, x1 + 1, y1 + 3, x2 - 1, y2 - 1, blackBoxStyle, text)
+			}
+			s.Show()
+			continue
+		}
+		drawBox(s, boundary, boxStyle)
 		for id, snake := range game.Snakes {
 			if !snake.alive {
 				continue
