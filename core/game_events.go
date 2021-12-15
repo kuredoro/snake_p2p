@@ -15,7 +15,7 @@ type NewFood struct {
 type Direction int
 
 const (
-	UP Direction = iota
+	Up Direction = iota
 	Right
 	Down
 	Left
