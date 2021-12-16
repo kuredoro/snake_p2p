@@ -30,13 +30,13 @@ type Game struct {
 }
 
 func GameInit(ch chan interface{}) *Game  {
-	game := new(Game)
-	game.Ch = ch
-	game.Food = make(map[int]core.Coord)
-	game.Snakes = make(map[int]*Snake)
-	game.AliveSnakes = 0
-	game.Over = false
-	game.Winner = -1
+	game := &Game {
+		Ch:       ch,
+		Food:     make(map[int]core.Coord),
+		Snakes:   make(map[int]*Snake),
+		AliveSnakes: 0,
+		Over: false,
+		WinnerID: -1}
 	return game
 }
 
