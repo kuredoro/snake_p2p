@@ -25,8 +25,19 @@ type Game struct {
 	Snakes         map[int]*Snake   // snakes' state: alive snakes with ID, head and body coordinates
 	Food           map[int]core.Coord     // food state: coordinates of food on the field
 	NumAliveSnakes int              // number of alive snakes in the game
-	Over 	   bool				// whether game is over or not
+	Over 	   	   bool				// whether game is over or not
 	Winner 		   int				// ID of the player who won the game
+}
+
+func GameInit(ch chan interface{}) *Game  {
+	game := new(Game)
+	game.Ch = ch
+	game.Food = make(map[int]core.Coord)
+	game.Snakes = make(map[int]*Snake)
+	game.NumAliveSnakes = 0
+	game.Over = false
+	game.Winner = -1
+	return game
 }
 
 type Boundary struct {
@@ -150,7 +161,6 @@ func (game *Game) handleGameEvent(event interface{}) {
 	switch event := event.(type) {
 	case core.PlayerStarts:
 		game.NumAliveSnakes = len(event.Players)
-		game.Snakes = make(map[int]*Snake)
 		for id, start := range event.Players {
 			game.Snakes[id] = &Snake{alive: true, Head: start, Style: genSnakeStyle(defColors)}
 		}
@@ -192,8 +202,6 @@ func (game *Game) handleGameEvent(event interface{}) {
 		game.Over = true
 		if event.Successful {
 			game.Winner = event.Winner
-		} else {
-			game.Winner = -1
 		}
 	case core.Tick:
 	}
