@@ -13,12 +13,10 @@ func main() {
 	game := new(console.Game)
 	game.Ch = make(chan interface{}, 100)
 	// Add events to channel
-	startPlayerPos := make(map[int]core.Coord)
-	startPlayerPos[0] = core.Coord{X: 4, Y: 2}
-	startPlayerPos[1] = core.Coord{X: 7, Y: 5}
-	startPlayerPos[2] = core.Coord{X: 10, Y: 2}
-	startPlayerPos[3] = core.Coord{X: 10, Y: 6}
-	game.Ch <- core.PlayerStarts{Players: startPlayerPos}
+	game.Ch <- core.PlayerStarts{Players: map[int]core.Coord{0: {X: 4, Y: 2},
+															 1: {X: 7, Y: 5},
+															 2: {X: 10, Y: 2},
+															 3: {X: 10, Y: 6}}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.NewFood{Pos: core.Coord{X: 5, Y: 2}}
 	game.Ch <- core.Tick{}
@@ -33,7 +31,7 @@ func main() {
 	game.Ch <- core.NewFood{Pos: core.Coord{X: 10, Y: 4}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
-															 1: core.Down,
+															 1: core.Up,
 															 2: core.Down,
 															 3: core.Right}}
 	game.Ch <- core.FoodEaten{Pos: core.Coord{X: 5, Y: 3}}
@@ -46,6 +44,11 @@ func main() {
 															 3: core.Left}}
 	game.Ch <- core.PlayerDied{ID: 2}
 	game.Ch <- core.PlayerDied{ID: 3}
+	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
+															 1: core.Left}}
+	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
+															 1: core.Left}}
+	game.Ch <- core.PlayerDied{ID: 1}
 	game.Ch <- core.GameOver{Successful: true, Winner: 0}
 	game.RunGame()
 }
