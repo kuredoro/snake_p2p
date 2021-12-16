@@ -165,7 +165,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 			game.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
 		}
 	case core.NewFood:
-		game.Food[event.ID] = event.Pos
+		game.Food[event.FoodID] = event.Pos
 	case core.PlayerMove:
 		for id, dir := range event.Moves {
 			prevHead := game.Snakes[id].Head
@@ -197,7 +197,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 	case core.PushSegment:
 		game.Snakes[event.SnakeID].Body = append(game.Snakes[event.SnakeID].Body, event.Pos)
 	case core.PlayerDied:
-		game.Snakes[event.ID].Alive = false
+		game.Snakes[event.SnakeID].Alive = false
 	case core.GameOver:
 		game.Over = true
 		if event.Successful {
