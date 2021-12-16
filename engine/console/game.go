@@ -2,13 +2,14 @@ package console
 
 import (
 	"fmt"
-	"github.com/gdamore/tcell/v2"
-	"github.com/kuredoro/snake_p2p/core"
 	"log"
 	"math/rand"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/kuredoro/snake_p2p/core"
 	//"github.com/sanity-io/litter"
 )
 
@@ -35,7 +36,8 @@ func GameInit(ch chan interface{}) *Game {
 		Snakes:      make(map[int]*Snake),
 		AliveSnakes: 0,
 		Over:        false,
-		WinnerID:    -1}
+		WinnerID:    -1,
+	}
 	return game
 }
 
@@ -100,14 +102,14 @@ func drawBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 		s.SetContent(x2, y2, tcell.RuneLRCorner, nil, style)
 	}
 
-	//drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
+	// drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
 func drawSnake(s tcell.Screen, ID int, snake *Snake, boundary Boundary) error {
 	if boundary.Contains(snake.Head) {
 		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
-	var id = []rune(strconv.Itoa(ID))
+	id := []rune(strconv.Itoa(ID))
 	s.SetContent(snake.Head.X, snake.Head.Y, id[0], nil, snake.Style)
 	for _, point := range snake.Body {
 		if boundary.Contains(point) {
@@ -244,7 +246,7 @@ func (game *Game) RunGame() {
 			select {
 			case event, ok := <-game.Ch:
 				if !ok {
-					//s.Fini()
+					// s.Fini()
 					panic("Channel is closed")
 				}
 
