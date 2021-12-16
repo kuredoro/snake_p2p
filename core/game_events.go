@@ -9,6 +9,7 @@ type PlayerStarts struct {
 }
 
 type NewFood struct {
+	ID int		 // ID of food
 	Pos Coord    // coordinates of new food
 }
 
@@ -29,7 +30,7 @@ type PlayerDied struct {
 }
 
 type FoodEaten struct {
-	Pos Coord  // coordinates of eaten food
+	ID int		// eaten food ID
 }
 
 type PushSegment struct {
