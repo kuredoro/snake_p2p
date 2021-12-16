@@ -34,7 +34,7 @@ func GameInit(ch chan interface{}) *Game  {
 	game.Ch = ch
 	game.Food = make(map[int]core.Coord)
 	game.Snakes = make(map[int]*Snake)
-	game.NumAliveSnakes = 0
+	game.AliveSnakes = 0
 	game.Over = false
 	game.Winner = -1
 	return game
