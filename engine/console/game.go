@@ -14,19 +14,19 @@ import (
 )
 
 type Snake struct {
-	alive bool         // whether snake is alive or not
-	Body  []core.Coord // coordinates of snakep2p's body
-	Head  core.Coord   // coordinates of snakep2p's head
-	Style tcell.Style  // snakep2p's style
+	Alive bool
+	Body  []core.Coord
+	Head  core.Coord
+	Style tcell.Style
 }
 
 type Game struct {
-	Ch             chan interface{} // communication channel
-	Snakes         map[int]*Snake   // snakes' state: alive snakes with ID, head and body coordinates
-	Food           map[int]core.Coord     // food state: coordinates of food on the field
-	NumAliveSnakes int              // number of alive snakes in the game
-	Over 	   	   bool				// whether game is over or not
-	Winner 		   int				// ID of the player who won the game
+	Ch          chan interface{}
+	Snakes      map[int]*Snake
+	Food        map[int]core.Coord
+	AliveSnakes int
+	Over     bool
+	WinnerID int
 }
 
 func GameInit(ch chan interface{}) *Game  {
@@ -160,9 +160,9 @@ var defColors = map[tcell.Color]struct{}{
 func (game *Game) handleGameEvent(event interface{}) {
 	switch event := event.(type) {
 	case core.PlayerStarts:
-		game.NumAliveSnakes = len(event.Players)
+		game.AliveSnakes = len(event.Players)
 		for id, start := range event.Players {
-			game.Snakes[id] = &Snake{alive: true, Head: start, Style: genSnakeStyle(defColors)}
+			game.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
 		}
 	case core.NewFood:
 		game.Food[event.ID] = event.Pos
@@ -193,15 +193,15 @@ func (game *Game) handleGameEvent(event interface{}) {
 			game.Snakes[id].Body[0] = prevHead
 		}
 	case core.FoodEaten:
-		delete(game.Food, event.ID)
+		delete(game.Food, event.FoodID)
 	case core.PushSegment:
-		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
+		game.Snakes[event.SnakeID].Body = append(game.Snakes[event.SnakeID].Body, event.Pos)
 	case core.PlayerDied:
-		game.Snakes[event.ID].alive = false
+		game.Snakes[event.ID].Alive = false
 	case core.GameOver:
 		game.Over = true
 		if event.Successful {
-			game.Winner = event.Winner
+			game.WinnerID = event.Winner
 		}
 	case core.Tick:
 	}
@@ -277,7 +277,7 @@ func (game *Game) RunGame() {
 		if game.Over {
 			drawBox(s, boundary, boxStyle)
 			width, height := 12, 0
-			if game.Winner != -1 {
+			if game.WinnerID != -1 {
 				height = 4
 			} else {
 				height = 2
@@ -288,8 +288,8 @@ func (game *Game) RunGame() {
 			y2 := (boundary.BottomRight.Y - boundary.TopLeft.Y + height) / 2
 			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
 			drawText(s, x1 + 1, y1 + 1, x2 - 1, y2 - 1, blackBoxStyle, "Game Over")
-			if game.Winner != -1 {
-				text := "Winner " + strconv.Itoa(game.Winner)
+			if game.WinnerID != -1 {
+				text := "WinnerID " + strconv.Itoa(game.WinnerID)
 				drawText(s, x1 + 1, y1 + 3, x2 - 1, y2 - 1, blackBoxStyle, text)
 			}
 			s.Show()
@@ -297,7 +297,7 @@ func (game *Game) RunGame() {
 		}
 		drawBox(s, boundary, boxStyle)
 		for id, snake := range game.Snakes {
-			if !snake.alive {
+			if !snake.Alive {
 				continue
 			}
 			err := drawSnake(s, id, snake, boundary)
