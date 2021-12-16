@@ -40,17 +40,17 @@ func main() {
 		3: core.Right}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
-															 1: core.Right,
-															 2: core.Down,
-															 3: core.Left}}
+		1: core.Right,
+		2: core.Down,
+		3: core.Left}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.PlayerDied{SnakeID: 2}
 	game.Ch <- core.PlayerDied{SnakeID: 3}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
-															 1: core.Left}}
+		1: core.Left}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{0: core.Down,
-															 1: core.Left}}
+		1: core.Left}}
 	game.Ch <- core.Tick{}
 	game.Ch <- core.PlayerDied{SnakeID: 1}
 	game.Ch <- core.GameOver{Successful: true, Winner: 0}
