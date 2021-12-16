@@ -23,7 +23,7 @@ type Snake struct {
 type Game struct {
 	Ch             chan interface{} // communication channel
 	Snakes         map[int]*Snake   // snakes' state: alive snakes with ID, head and body coordinates
-	Food           []core.Coord     // food state: coordinates of food on the field
+	Food           map[int]core.Coord     // food state: coordinates of food on the field
 	NumAliveSnakes int              // number of alive snakes in the game
 	Over 	   bool				// whether game is over or not
 	Winner 		   int				// ID of the player who won the game
@@ -155,7 +155,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 			game.Snakes[id] = &Snake{alive: true, Head: start, Style: genSnakeStyle(defColors)}
 		}
 	case core.NewFood:
-		game.Food = append(game.Food, event.Pos)
+		game.Food[event.ID] = event.Pos
 	case core.PlayerMove:
 		for id, dir := range event.Moves {
 			prevHead := game.Snakes[id].Head
@@ -183,16 +183,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 			game.Snakes[id].Body[0] = prevHead
 		}
 	case core.FoodEaten:
-		idx := 0
-		for i, food := range game.Food {
-			if food.X == event.Pos.X && food.Y == event.Pos.Y {
-				idx = i
-				break
-			}
-		}
-		game.Food[idx] = game.Food[len(game.Food) - 1]
-		game.Food[len(game.Food) - 1] = core.Coord{}
-		game.Food = game.Food[0:len(game.Food) - 1]
+		delete(game.Food, event.ID)
 	case core.PushSegment:
 		game.Snakes[event.ID].Body = append(game.Snakes[event.ID].Body, event.Pos)
 	case core.PlayerDied:
