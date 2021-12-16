@@ -5,12 +5,12 @@ type Coord struct {
 }
 
 type PlayerStarts struct {
-	Players map[int]Coord  // map from player's ID to its start coordinates
+	Players map[int]Coord  // map from player's SnakeID to its start coordinates
 }
 
 type NewFood struct {
-	ID int		 // ID of food
-	Pos Coord    // coordinates of new food
+	FoodID int
+	Pos    Coord
 }
 
 type Direction int
@@ -22,25 +22,25 @@ const (
 	Left
 )
 type PlayerMove struct {
-	Moves map[int] Direction   // map from player's ID to direction of it's move
+	Moves map[int] Direction   // map from player's SnakeID to direction of it's move
 }
 
 type PlayerDied struct {
-	ID int     // ID of player who died
+	SnakeID int // SnakeID of player who died
 }
 
 type FoodEaten struct {
-	ID int		// eaten food ID
+	FoodID int
 }
 
 type PushSegment struct {
-	ID int		// ID of snake
-	Pos Coord	// coordinates of a cell to add to a snake
+	SnakeID int
+	Pos     Coord // coordinates of a cell to add to a snake
 }
 
 type Tick struct{}
 
 type GameOver struct {
 	Successful bool    // did game finish without errors or not
-	Winner int      // ID of winner player
+	Winner int      // SnakeID of winner player
 }
