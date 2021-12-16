@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/kuredoro/snake_p2p/core"
 	"math/rand"
 	"time"
 
@@ -29,6 +30,7 @@ func eventsSequence(game *console.Game) {
 	game.Ch <- core.FoodEaten{FoodID: 0}
 	game.Ch <- core.PushSegment{SnakeID: 0, Pos: core.Coord{X: 4, Y: 2}}
 	game.Ch <- core.NewFood{FoodID: 1, Pos: core.Coord{X: 5, Y: 3}}
+	time.Sleep(2 * time.Second)
 	game.Ch <- core.NewFood{FoodID: 2, Pos: core.Coord{X: 10, Y: 4}}
 	game.Ch <- core.Tick{}
 	time.Sleep(2 * time.Second)
