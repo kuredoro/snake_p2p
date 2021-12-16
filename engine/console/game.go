@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
 	//"github.com/sanity-io/litter"
 )
 
@@ -25,18 +24,18 @@ type Game struct {
 	Snakes      map[int]*Snake
 	Food        map[int]core.Coord
 	AliveSnakes int
-	Over     bool
-	WinnerID int
+	Over        bool
+	WinnerID    int
 }
 
-func GameInit(ch chan interface{}) *Game  {
-	game := &Game {
-		Ch:       ch,
-		Food:     make(map[int]core.Coord),
-		Snakes:   make(map[int]*Snake),
+func GameInit(ch chan interface{}) *Game {
+	game := &Game{
+		Ch:          ch,
+		Food:        make(map[int]core.Coord),
+		Snakes:      make(map[int]*Snake),
 		AliveSnakes: 0,
-		Over: false,
-		WinnerID: -1}
+		Over:        false,
+		WinnerID:    -1}
 	return game
 }
 
@@ -188,7 +187,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 				continue
 			}
 			for i := len(game.Snakes[id].Body) - 1; i > 0; i-- {
-				game.Snakes[id].Body[i] = game.Snakes[id].Body[i - 1]
+				game.Snakes[id].Body[i] = game.Snakes[id].Body[i-1]
 			}
 			game.Snakes[id].Body[0] = prevHead
 		}
@@ -287,10 +286,10 @@ func (game *Game) RunGame() {
 			x2 := (boundary.BottomRight.X - boundary.TopLeft.X + width) / 2
 			y2 := (boundary.BottomRight.Y - boundary.TopLeft.Y + height) / 2
 			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
-			drawText(s, x1 + 1, y1 + 1, x2 - 1, y2 - 1, blackBoxStyle, "Game Over")
+			drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "Game Over")
 			if game.WinnerID != -1 {
 				text := "WinnerID " + strconv.Itoa(game.WinnerID)
-				drawText(s, x1 + 1, y1 + 3, x2 - 1, y2 - 1, blackBoxStyle, text)
+				drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
 			}
 			s.Show()
 			continue
