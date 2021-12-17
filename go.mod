@@ -4,10 +4,12 @@ go 1.17
 
 require (
 	github.com/gdamore/tcell/v2 v2.4.0
+	github.com/hashicorp/go-multierror v1.0.0
 	github.com/i582/cfmt v1.4.0
 	github.com/libp2p/go-libp2p v0.17.0
 	github.com/libp2p/go-libp2p-core v0.13.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.0
+	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 )
 
 require (
@@ -26,6 +28,7 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/gookit/color v1.3.2 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/huin/goupnp v1.0.2 // indirect
 	github.com/ipfs/go-cid v0.0.7 // indirect
@@ -110,7 +113,6 @@ require (
 	go.uber.org/zap v1.19.0 // indirect
 	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e // indirect
 	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210816183151-1e6c022a8912 // indirect
 	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
