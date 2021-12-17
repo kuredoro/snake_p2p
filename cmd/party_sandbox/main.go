@@ -73,9 +73,11 @@ func main() {
     }
 }
 
-type Message struct {
-    Tag string
-    Timestamp time.Time
+type GatherPointMessage struct {
+    ConnectTo *peer.AddrInfo
+    TTL time.Duration
+    DesiredPlayerCount uint
+    CurrentPlayerCount uint
 }
 
 type NetworkMember struct {
@@ -85,7 +87,7 @@ type NetworkMember struct {
     sub *pubsub.Subscription
     selfID peer.ID
     tag string
-    Messages chan *Message
+    Messages chan *GatherPointMessage
 }
 
 func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfID peer.ID, tag string) (*NetworkMember, error) {
@@ -106,7 +108,7 @@ func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfID peer.ID, tag str
         sub: sub,
         selfID: selfID,
         tag: tag,
-        Messages: make(chan *Message, 32),
+        Messages: make(chan *GatherPointMessage, 32),
     }
 
     go nm.readLoop()
@@ -126,7 +128,9 @@ func (nm *NetworkMember) readLoop() {
             continue
         }
 
-        msg := &Message{}
+        fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
+
+        msg := &GatherPointMessage{}
         if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
             cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unmarshal %q\n", string(psMsg.Data))
             continue
@@ -137,9 +141,10 @@ func (nm *NetworkMember) readLoop() {
 }
 
 func (nm *NetworkMember) Publish(timestamp time.Time) error {
-    msg := Message{
-        Tag: nm.tag,
-        Timestamp: timestamp,
+    msg := GatherPointMessage{
+        TTL: time.Minute,
+        DesiredPlayerCount: 3,
+        CurrentPlayerCount: 0,
     }
 
     msgBytes, err := json.Marshal(msg)
