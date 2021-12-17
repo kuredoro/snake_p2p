@@ -25,6 +25,8 @@ func HostAddrInfo(h host.Host) *peer.AddrInfo {
 }
 
 func main() {
+    peerAddrFlag := flag.String("peer", "", "peer to connect to")
+    flag.Parse()
 
     // Set up host
     fmt.Print("Setting up host...")
@@ -44,6 +46,19 @@ func main() {
         os.Exit(1)
     }
     fmt.Println("Now listening")
+
+    if *peerAddrFlag != "" {
+        pi, err := peer.AddrInfoFromString(*peerAddrFlag)
+        if err != nil {
+            printErr("parse peer p2p multiaddr:", err)
+            os.Exit(1)
+        }
+
+        err = h.Connect(context.Background(), *pi)
+        if err != nil {
+            fmt.Printf("ERR connecting to peer %v: %v\n", pi.ID.Pretty(), err)
+        }
+    }
 
     // Set up pub/sub
     ctx := context.Background()
@@ -67,6 +82,7 @@ func main() {
         select {
         case msg := <-m.Messages:
             fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
+            //peer.AddrInfo.
         case <-timer.C:
             m.Publish(time.Now())
             timer.Reset(SendEvery)
