@@ -20,7 +20,7 @@ const (
 )
 
 type PeerStatus struct {
-	ID    peer.ID
+	Peer  peer.ID
 	Alive bool
 }
 
@@ -74,7 +74,7 @@ func (h *HeartbeatService) run() {
 		if res.Error != nil {
 			if h.peerStatus != dead {
 				h.reportCh <- PeerStatus{
-					ID:    h.peer,
+					Peer:  h.peer,
 					Alive: false,
 				}
 
@@ -87,7 +87,7 @@ func (h *HeartbeatService) run() {
 
 		if h.peerStatus != alive {
 			h.reportCh <- PeerStatus{
-				ID:    h.peer,
+				Peer:  h.peer,
 				Alive: true,
 			}
 
