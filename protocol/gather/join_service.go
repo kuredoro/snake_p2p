@@ -1,7 +1,9 @@
 package gather
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -38,5 +40,22 @@ func NewJoinService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService
 	return service, nil
 }
 
-func (s *JoinService) Run() {
+func (js *JoinService) Run() {
+	scanner := bufio.NewScanner(js.stream)
+
+	for scanner.Scan() {
+		var msg GatherMessage
+		err := json.Unmarshal(scanner.Bytes(), &msg)
+		if err != nil {
+			fmt.Printf("BAD MSG %q\n", scanner.Text())
+			continue
+		}
+
+		switch msg.Type {
+		case ConnectionRequest:
+			fmt.Printf("CONN REQUEST to %v\n", msg.Addrs[0].ID)
+		default:
+			fmt.Printf("BAD TYPE %#v", msg)
+		}
+	}
 }
