@@ -20,6 +20,8 @@ type GatherService struct {
 	streams map[peer.ID]network.Stream
 	topic   *pubsub.Topic
 	ttl     time.Duration
+
+	mesh map[peer.ID]map[peer.ID]struct{}
 }
 
 func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL time.Duration) (*GatherService, error) {
@@ -33,6 +35,8 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL
 		streams: make(map[peer.ID]network.Stream),
 		topic:   topic,
 		ttl:     TTL,
+
+		mesh: make(map[peer.ID]map[peer.ID]struct{}),
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
@@ -44,6 +48,10 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL
 
 func (gs *GatherService) GatherHandler(stream network.Stream) {
 	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
+
+	// TODO; set only after establishing Game protocol
+	gs.mesh[gs.h.ID()][stream.Conn().RemotePeer()] = struct{}{}
+	gs.mesh[stream.Conn().RemotePeer()][gs.h.ID()] = struct{}{}
 }
 
 func (gs *GatherService) publishLoop() {
