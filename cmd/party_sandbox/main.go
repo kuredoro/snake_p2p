@@ -2,191 +2,224 @@ package main
 
 import (
 	"context"
-    "encoding/json"
-    "flag"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
-    "time"
+	"time"
 
+	"github.com/i582/cfmt/cmd/cfmt"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-    pubsub "github.com/libp2p/go-libp2p-pubsub"
-    "github.com/i582/cfmt/cmd/cfmt"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
+	"github.com/kuredoro/snake_p2p/protocol/gather"
 )
 
 const SendEvery = time.Second
 
 func HostAddrInfo(h host.Host) *peer.AddrInfo {
-    return &peer.AddrInfo{
-        ID: h.ID(),
-        Addrs: h.Addrs(),
-    }
+	return &peer.AddrInfo{
+		ID:    h.ID(),
+		Addrs: h.Addrs(),
+	}
 }
 
 func main() {
-    peerAddrFlag := flag.String("peer", "", "peer to connect to")
-    flag.Parse()
+	peerAddrFlag := flag.String("peer", "", "peer to connect to")
+	gatherFlag := flag.Bool("gather", false, "should this peer announce a gather point?")
+	flag.Parse()
 
-    // Set up host
-    fmt.Print("Setting up host...")
-    os.Stdout.Sync()
+	// Set up host
+	fmt.Print("Setting up host...")
+	os.Stdout.Sync()
 
-    h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
-    if err != nil {
-        printErr("init node:", err)
-        os.Exit(1)
-    }
-    defer h.Close()
-    fmt.Println("ok")
+	h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	if err != nil {
+		printErr("init node:", err)
+		os.Exit(1)
+	}
+	defer h.Close()
+	fmt.Println("ok")
 
-    // Set up mDNS discovery
-    if err := setupDiscovery(h); err != nil {
-        printErr("setup discovery:", err)
-        os.Exit(1)
-    }
-    fmt.Println("Now listening")
+	// Set up mDNS discovery
+	if err := setupDiscovery(h); err != nil {
+		printErr("setup discovery:", err)
+		os.Exit(1)
+	}
+	fmt.Println("Now listening")
 
-    if *peerAddrFlag != "" {
-        pi, err := peer.AddrInfoFromString(*peerAddrFlag)
-        if err != nil {
-            printErr("parse peer p2p multiaddr:", err)
-            os.Exit(1)
-        }
+	if *peerAddrFlag != "" {
+		pi, err := peer.AddrInfoFromString(*peerAddrFlag)
+		if err != nil {
+			printErr("parse peer p2p multiaddr:", err)
+			os.Exit(1)
+		}
 
-        err = h.Connect(context.Background(), *pi)
-        if err != nil {
-            fmt.Printf("ERR connecting to peer %v: %v\n", pi.ID.Pretty(), err)
-        }
-    }
+		err = h.Connect(context.Background(), *pi)
+		if err != nil {
+			fmt.Printf("ERR connecting to peer %v: %v\n", pi.ID.Pretty(), err)
+		}
+	}
 
-    // Set up pub/sub
-    ctx := context.Background()
-    ps, err := pubsub.NewGossipSub(ctx, h)
-    if err != nil {
-        printErr("enable pubsub:", err)
-        os.Exit(1)
-    }
+	// Set up pub/sub
+	ctx := context.Background()
+	ps, err := pubsub.NewGossipSub(ctx, h)
+	if err != nil {
+		printErr("enable pubsub:", err)
+		os.Exit(1)
+	}
 
-    fmt.Print("Joining the network...")
-    m, err := JoinNetwork(ctx, ps, HostAddrInfo(h))
-    if err != nil {
-        printErr("join the network:", err)
-        os.Exit(1)
-    }
-    fmt.Println("ok")
+	fmt.Print("Joining the network...")
+	m, err := JoinNetwork(ctx, h, ps)
+	if err != nil {
+		printErr("join the network:", err)
+		os.Exit(1)
+	}
+	fmt.Println("ok")
 
-    // Read from the channel and send
-    timer := time.NewTimer(SendEvery)
-    for {
-        select {
-        case msg := <-m.Messages:
-            fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
-            //peer.AddrInfo.
-        case <-timer.C:
-            m.Publish(time.Now())
-            timer.Reset(SendEvery)
-        }
-    }
+	// Read from the channel and send
+	timer := time.NewTimer(SendEvery)
+	for {
+		select {
+		case msg := <-m.Messages:
+			fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
+			m.JoinGatherPoint(msg.ConnectTo)
+		case <-timer.C:
+			if !*gatherFlag {
+				continue
+			}
+
+			m.Publish(time.Now())
+			timer.Reset(SendEvery)
+		}
+	}
 }
 
 type GatherPointMessage struct {
-    ConnectTo *peer.AddrInfo
-    TTL time.Duration
-    DesiredPlayerCount uint
-    CurrentPlayerCount uint
+	ConnectTo          peer.AddrInfo
+	TTL                time.Duration
+	DesiredPlayerCount uint
+	CurrentPlayerCount uint
 }
+
+type FacilitationService struct{}
 
 type NetworkMember struct {
-    ctx context.Context
-    ps *pubsub.PubSub
-    topic *pubsub.Topic
-    sub *pubsub.Subscription
-    addrInfo *peer.AddrInfo
-    Messages chan *GatherPointMessage
+	ctx      context.Context
+	h        host.Host
+	ps       *pubsub.PubSub
+	topic    *pubsub.Topic
+	sub      *pubsub.Subscription
+	addrInfo *peer.AddrInfo
+
+	joinedGatherPoints map[peer.ID]*gather.SyncService
+	Messages           chan *GatherPointMessage
 }
 
-func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfInfo *peer.AddrInfo) (*NetworkMember, error) {
-    topic, err := ps.Join("snake_test")
-    if err != nil {
-        return nil, fmt.Errorf("join topic %q: %v", "snake_test", topic)
-    }
+func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkMember, error) {
+	topic, err := ps.Join("snake_test")
+	if err != nil {
+		return nil, fmt.Errorf("join topic %q: %v", "snake_test", topic)
+	}
 
-    sub, err := topic.Subscribe()
-    if err != nil {
-        return nil, fmt.Errorf("subscribe to %v: %v", topic, err)
-    }
+	sub, err := topic.Subscribe()
+	if err != nil {
+		return nil, fmt.Errorf("subscribe to %v: %v", topic, err)
+	}
 
-    nm := &NetworkMember{
-        ctx: ctx,
-        ps: ps,
-        topic: topic,
-        sub: sub,
-        addrInfo: selfInfo,
-        Messages: make(chan *GatherPointMessage, 32),
-    }
+	nm := &NetworkMember{
+		ctx:      ctx,
+		h:        h,
+		ps:       ps,
+		topic:    topic,
+		sub:      sub,
+		addrInfo: HostAddrInfo(h),
+		Messages: make(chan *GatherPointMessage, 32),
+	}
 
-    go nm.readLoop()
-    return nm, nil
+	go nm.readLoop()
+	return nm, nil
+}
+
+func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
+	if _, joined := nm.joinedGatherPoints[pi.ID]; joined {
+		return nil
+	}
+
+	err := nm.h.Connect(nm.ctx, pi)
+	if err != nil {
+		return fmt.Errorf("join gather point: %v", err)
+	}
+
+	service, err := gather.NewSyncService(nm.ctx, nm.h, pi.ID)
+	if err != nil {
+		return fmt.Errorf("create sync service for peer %v: %v", pi.ID.ShortString(), err)
+	}
+
+	nm.joinedGatherPoints[pi.ID] = service
+
+	return nil
 }
 
 func (nm *NetworkMember) readLoop() {
-    for {
-        psMsg, err := nm.sub.Next(nm.ctx)
-        if err != nil {
-            printErr("receive next message:", err)
-            close(nm.Messages)
-            return
-        }
+	for {
+		psMsg, err := nm.sub.Next(nm.ctx)
+		if err != nil {
+			printErr("receive next message:", err)
+			close(nm.Messages)
+			return
+		}
 
-        if psMsg.ReceivedFrom == nm.addrInfo.ID {
-            continue
-        }
+		if psMsg.ReceivedFrom == nm.addrInfo.ID {
+			continue
+		}
 
-        fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
+		fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
 
-        msg := &GatherPointMessage{}
-        if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
-            cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unmarshal %q\n", string(psMsg.Data))
-            continue
-        }
+		msg := &GatherPointMessage{}
+		if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
+			cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unmarshal %q\n", string(psMsg.Data))
+			continue
+		}
 
-        nm.Messages <- msg
-    }
+		nm.Messages <- msg
+	}
 }
 
 func (nm *NetworkMember) Publish(timestamp time.Time) error {
-    msg := GatherPointMessage{
-        ConnectTo: nm.addrInfo,
-        TTL: time.Minute,
-        DesiredPlayerCount: 3,
-        CurrentPlayerCount: 0,
-    }
+	msg := GatherPointMessage{
+		ConnectTo:          *nm.addrInfo,
+		TTL:                time.Minute,
+		DesiredPlayerCount: 3,
+		CurrentPlayerCount: 0,
+	}
 
-    msgBytes, err := json.Marshal(msg)
-    if err != nil {
-        return fmt.Errorf("marshal: %v", err)
-    }
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal: %v", err)
+	}
 
-    err = nm.topic.Publish(nm.ctx, msgBytes)
-    if err != nil {
-        return fmt.Errorf("publish: %v", err)
-    }
+	err = nm.topic.Publish(nm.ctx, msgBytes)
+	if err != nil {
+		return fmt.Errorf("publish: %v", err)
+	}
 
-    return nil
+	return nil
 }
 
 func printErr(m string, args ...interface{}) {
-    if len(args) == 0 {
-        panic("printErr: no arguments passed")
-    }
+	if len(args) == 0 {
+		panic("printErr: no arguments passed")
+	}
 
-    err := args[len(args)-1]
+	err := args[len(args)-1]
 
-    header := m
-    if len(args) > 1 {
-        header = fmt.Sprintf(m, args[:len(args)-1])
-    }
+	header := m
+	if len(args) > 1 {
+		header = fmt.Sprintf(m, args[:len(args)-1])
+	}
 
-    cfmt.Printf("{{error:}}::lightRed|bold %s %v\n", header, err)
+	cfmt.Printf("{{error:}}::lightRed|bold %s %v\n", header, err)
 }
