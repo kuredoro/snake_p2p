@@ -9,14 +9,14 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-type SyncService struct {
+type JoinService struct {
 	ctx    context.Context
 	cancel func()
 
 	stream network.Stream
 }
 
-func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*SyncService, error) {
+func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService, error) {
 	stream, err := h.NewStream(ctx, pID, ID)
 	if err != nil {
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
@@ -24,7 +24,7 @@ func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*SyncService
 
 	localCtx, cancel := context.WithCancel(ctx)
 
-	service := &SyncService{
+	service := &JoinService{
 		ctx:    localCtx,
 		cancel: cancel,
 
@@ -36,5 +36,5 @@ func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*SyncService
 	return service, nil
 }
 
-func (s *SyncService) Run() {
+func (s *JoinService) Run() {
 }

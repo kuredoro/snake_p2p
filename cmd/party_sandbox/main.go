@@ -104,8 +104,6 @@ type GatherPointMessage struct {
 	CurrentPlayerCount uint
 }
 
-type FacilitationService struct{}
-
 type NetworkMember struct {
 	ctx      context.Context
 	h        host.Host
@@ -114,7 +112,8 @@ type NetworkMember struct {
 	sub      *pubsub.Subscription
 	addrInfo *peer.AddrInfo
 
-	joinedGatherPoints map[peer.ID]*gather.SyncService
+	joinedGatherPoints map[peer.ID]*gather.JoinService
+	gatherService      *gather.GatherService
 	Messages           chan *GatherPointMessage
 }
 
