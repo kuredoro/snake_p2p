@@ -21,6 +21,13 @@ import (
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 )
 
+func HostAddrInfo(h host.Host) *peer.AddrInfo {
+	return &peer.AddrInfo{
+		ID:    h.ID(),
+		Addrs: h.Addrs(),
+	}
+}
+
 type peerMesh map[peer.ID]map[peer.ID]struct{}
 
 type peerMeshMod func(peerMesh) bool
@@ -104,7 +111,6 @@ func (m peerMesh) String() string {
 type GatherService struct {
 	ctx                         context.Context
 	cancel                      func()
-	publishDone                 chan struct{}
 	monitorDone, meshUpdateDone chan struct{}
 
 	h       host.Host
@@ -118,6 +124,8 @@ type GatherService struct {
 	ping             *ping.PingService
 	conns            map[peer.ID]*heartbeat.HeartbeatService
 	localConnUpdates chan heartbeat.PeerStatus
+
+	beacon *GatherPointBeacon
 }
 
 func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
@@ -126,7 +134,6 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 	gs := &GatherService{
 		ctx:            localCtx,
 		cancel:         cancel,
-		publishDone:    make(chan struct{}),
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
 
@@ -141,11 +148,12 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 		ping:             ping,
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
 		localConnUpdates: make(chan heartbeat.PeerStatus),
+
+		beacon: NewGatherPointBeacon(localCtx, topic, *HostAddrInfo(h), TTL),
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
 
-	go gs.publishLoop()
 	go gs.monitorLoop()
 	go gs.meshUpdateLoop()
 
@@ -163,50 +171,6 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 	peer := stream.Conn().RemotePeer()
 	gs.streams[peer] = stream
 	gs.conns[peer] = hb
-}
-
-func (gs *GatherService) publishLoop() {
-	timer := time.NewTimer(gs.ttl)
-
-	for {
-		select {
-		case <-timer.C:
-			err := gs.publish()
-			if err != nil {
-				fmt.Printf("gather service: announce: %v\n", err)
-			}
-			timer.Reset(gs.ttl)
-		case <-gs.ctx.Done():
-			close(gs.publishDone)
-			return
-		}
-	}
-}
-
-func (gs *GatherService) publish() error {
-	selfInfo := peer.AddrInfo{
-		ID:    gs.h.ID(),
-		Addrs: gs.h.Addrs(),
-	}
-
-	msg := GatherPointMessage{
-		ConnectTo:          selfInfo,
-		TTL:                time.Minute,
-		DesiredPlayerCount: 3,
-		CurrentPlayerCount: 0,
-	}
-
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshal gather point messasge: %v", err)
-	}
-
-	err = gs.topic.Publish(gs.ctx, msgBytes)
-	if err != nil {
-		return fmt.Errorf("publish gather point message: %v", err)
-	}
-
-	return nil
 }
 
 func (gs *GatherService) meshUpdateLoop() {
@@ -258,13 +222,13 @@ func (gs *GatherService) monitorLoop() {
 				gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.Peer)
 
 				/*
-				                The main stream may still be alive
+					                The main stream may still be alive
 
-								gs.streams[peerStatus.ID].Close()
-								delete(gs.streams, peerStatus.ID)
+									gs.streams[peerStatus.ID].Close()
+									delete(gs.streams, peerStatus.ID)
 
-								gs.conns[peerStatus.ID].Close()
-								delete(gs.conns, peerStatus.ID)
+									gs.conns[peerStatus.ID].Close()
+									delete(gs.conns, peerStatus.ID)
 				*/
 
 				fmt.Printf("PEER DEAD %v\n", peerStatus.Peer)
@@ -348,9 +312,9 @@ func (gs *GatherService) Close() {
 	wg.Wait()
 
 	gs.cancel()
-	<-gs.publishDone
 	<-gs.monitorDone
 	<-gs.meshUpdateDone
+	<-gs.beacon.Done()
 
 	close(gs.localConnUpdates)
 
