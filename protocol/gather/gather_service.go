@@ -10,6 +10,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+
+	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 )
 
 type GatherService struct {
@@ -22,9 +25,13 @@ type GatherService struct {
 	ttl     time.Duration
 
 	mesh map[peer.ID]map[peer.ID]struct{}
+
+	ping             *ping.PingService
+	conns            map[peer.ID]*heartbeat.HeartbeatService
+	localConnUpdates chan heartbeat.PeerStatus
 }
 
-func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL time.Duration) (*GatherService, error) {
+func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
 	localCtx, cancel := context.WithCancel(ctx)
 
 	gs := &GatherService{
@@ -37,11 +44,16 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL
 		ttl:     TTL,
 
 		mesh: make(map[peer.ID]map[peer.ID]struct{}),
+
+		ping:             ping,
+		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
+		localConnUpdates: make(chan heartbeat.PeerStatus),
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
 
 	go gs.publishLoop()
+	go gs.monitorLoop()
 
 	return gs, nil
 }
@@ -49,9 +61,12 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, TTL
 func (gs *GatherService) GatherHandler(stream network.Stream) {
 	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
 
-	// TODO; set only after establishing Game protocol
-	gs.mesh[gs.h.ID()][stream.Conn().RemotePeer()] = struct{}{}
-	gs.mesh[stream.Conn().RemotePeer()][gs.h.ID()] = struct{}{}
+	hb, err := heartbeat.NewHeartbeat(gs.ctx, gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
+	if err != nil {
+		panic(err)
+	}
+
+	gs.conns[stream.Conn().RemotePeer()] = hb
 }
 
 func (gs *GatherService) publishLoop() {
@@ -95,4 +110,32 @@ func (gs *GatherService) publish() error {
 	}
 
 	return nil
+}
+func (gs *GatherService) monitorLoop() {
+	for {
+		select {
+		case <-gs.ctx.Done():
+			return
+		case peerStatus := <-gs.localConnUpdates:
+			switch peerStatus.Alive {
+			case true:
+				// TODO: rename ID to Peer
+				if _, exists := gs.mesh[gs.h.ID()]; !exists {
+					gs.mesh[gs.h.ID()] = make(map[peer.ID]struct{})
+				}
+
+				if _, exists := gs.mesh[peerStatus.ID]; !exists {
+					gs.mesh[peerStatus.ID] = make(map[peer.ID]struct{})
+				}
+
+				gs.mesh[gs.h.ID()][peerStatus.ID] = struct{}{}
+				gs.mesh[peerStatus.ID][gs.h.ID()] = struct{}{}
+				fmt.Printf("PEER ALIVE %v\n", peerStatus.ID)
+			case false:
+				delete(gs.mesh[gs.h.ID()], peerStatus.ID)
+				delete(gs.mesh[peerStatus.ID], gs.h.ID())
+				fmt.Printf("PEER DEAD %v\n", peerStatus.ID)
+			}
+		}
+	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 )
@@ -98,6 +99,7 @@ type NetworkMember struct {
 	topic    *pubsub.Topic
 	sub      *pubsub.Subscription
 	addrInfo *peer.AddrInfo
+	ping     *ping.PingService
 
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
@@ -122,6 +124,7 @@ func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkM
 		topic:              topic,
 		sub:                sub,
 		addrInfo:           HostAddrInfo(h),
+		ping:               ping.NewPingService(h),
 		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
 		Messages:           make(chan *gather.GatherPointMessage, 32),
 	}
@@ -153,7 +156,7 @@ func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
 }
 
 func (nm *NetworkMember) CreateGatherPoint(TTL time.Duration) (err error) {
-	nm.gatherService, err = gather.NewGatherService(nm.ctx, nm.h, nm.topic, SendEvery)
+	nm.gatherService, err = gather.NewGatherService(nm.ctx, nm.h, nm.topic, nm.ping, SendEvery)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
