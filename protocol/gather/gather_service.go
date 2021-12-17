@@ -70,7 +70,9 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 		panic(err)
 	}
 
-	gs.conns[stream.Conn().RemotePeer()] = hb
+	peer := stream.Conn().RemotePeer()
+	gs.streams[peer] = stream
+	gs.conns[peer] = hb
 }
 
 func (gs *GatherService) publishLoop() {
@@ -141,6 +143,13 @@ func (gs *GatherService) monitorLoop() {
 			case false:
 				delete(gs.mesh[gs.h.ID()], peerStatus.ID)
 				delete(gs.mesh[peerStatus.ID], gs.h.ID())
+
+				gs.streams[peerStatus.ID].Close()
+				delete(gs.streams, peerStatus.ID)
+
+				gs.conns[peerStatus.ID].Close()
+				delete(gs.conns, peerStatus.ID)
+
 				fmt.Printf("PEER DEAD %v\n", peerStatus.ID)
 			}
 		}
