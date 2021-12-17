@@ -13,6 +13,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
+	"github.com/hashicorp/go-multierror"
+
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 )
 
@@ -140,6 +142,11 @@ func (gs *GatherService) monitorLoop() {
 				gs.mesh[gs.h.ID()][peerStatus.ID] = struct{}{}
 				gs.mesh[peerStatus.ID][gs.h.ID()] = struct{}{}
 				fmt.Printf("PEER ALIVE %v\n", peerStatus.ID)
+
+				err := gs.askEverybodyToConnectTo(peerStatus.ID)
+				if err != nil {
+					fmt.Printf("EVTC %v\n", err)
+				}
 			case false:
 				delete(gs.mesh[gs.h.ID()], peerStatus.ID)
 				delete(gs.mesh[peerStatus.ID], gs.h.ID())
@@ -154,6 +161,67 @@ func (gs *GatherService) monitorLoop() {
 			}
 		}
 	}
+}
+
+func (gs *GatherService) askEverybodyToConnectTo(peer peer.ID) (merr error) {
+	errCh := make(chan error)
+
+	msgCount := 0
+	for srcID := range gs.mesh {
+		if srcID == peer || srcID == gs.h.ID() {
+			continue
+		}
+		fmt.Printf("Asking %v\n", srcID)
+
+		stream, ok := gs.streams[srcID]
+		if !ok {
+			fmt.Printf("WAT peer is present in the mesh, but has no stream... ID %v\n", srcID)
+			continue
+		}
+
+		go func() {
+			errCh <- gs.askPeerToConnectTo(stream, gs.h.Peerstore().PeerInfo(peer))
+		}()
+
+		msgCount++
+	}
+
+	// Sanity check
+	if msgCount != len(gs.mesh)-2 {
+		fmt.Printf("WAT going to notify %d peers, but expected %d\n", msgCount, len(gs.streams)-1)
+	}
+
+	for i := 0; i < msgCount; i++ {
+		err := <-errCh
+		if err != nil {
+			merr = multierror.Append(merr, fmt.Errorf("send connection request: %v", err))
+		}
+	}
+
+	close(errCh)
+
+	return
+}
+
+func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrInfo) error {
+	msg := GatherMessage{
+		Type:  ConnectionRequest,
+		Addrs: []peer.AddrInfo{pi},
+	}
+
+	raw, err := json.Marshal(&msg)
+	if err != nil {
+		return fmt.Errorf("marshal: %v", err)
+	}
+
+	raw = append(raw, '\n')
+
+	_, err = stream.Write(raw)
+	if err != nil {
+		return fmt.Errorf("send: %v", err)
+	}
+
+	return nil
 }
 
 func (gs *GatherService) Close() {
