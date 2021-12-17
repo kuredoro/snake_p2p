@@ -104,7 +104,8 @@ func (m peerMesh) String() string {
 type GatherService struct {
 	ctx                      context.Context
 	cancel                   func()
-	publishDone, monitorDone chan struct{}
+	publishDone chan struct{}
+    monitorDone, meshUpdateDone chan struct{}
 
 	h       host.Host
 	streams map[peer.ID]network.Stream
@@ -112,6 +113,7 @@ type GatherService struct {
 	ttl     time.Duration
 
 	mesh peerMesh
+    meshCh chan peerMeshMod
 
 	ping             *ping.PingService
 	conns            map[peer.ID]*heartbeat.HeartbeatService
@@ -126,6 +128,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 		cancel:      cancel,
 		publishDone: make(chan struct{}),
 		monitorDone: make(chan struct{}),
+        meshUpdateDone: make(chan struct{}),
 
 		h:       h,
 		streams: make(map[peer.ID]network.Stream),
@@ -133,6 +136,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 		ttl:     TTL,
 
 		mesh: make(peerMesh),
+        meshCh: make(chan peerMeshMod),
 
 		ping:             ping,
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
@@ -143,6 +147,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 
 	go gs.publishLoop()
 	go gs.monitorLoop()
+    go gs.meshUpdateLoop()
 
 	return gs, nil
 }
@@ -204,6 +209,35 @@ func (gs *GatherService) publish() error {
 	return nil
 }
 
+func (gs *GatherService) meshUpdateLoop() {
+    scanResults := make(chan struct{})
+    defer close(scanResults)
+
+    for {
+        select {
+        case <-gs.ctx.Done():
+            close(gs.meshUpdateDone)
+            return
+        case mod := <-gs.meshCh:
+            rescan := mod(gs.mesh)
+
+            fmt.Printf("mesh update:\n%v\n", gs.mesh)
+
+            if !rescan {
+                continue
+            }
+
+            go func() {
+                time.Sleep(time.Second)
+                scanResults <- struct{}{}
+            }()
+        case <-scanResults:
+            fmt.Printf("RESCANNED\n")
+        }
+    }
+
+}
+
 func (gs *GatherService) monitorLoop() {
 	for {
 		select {
@@ -214,16 +248,7 @@ func (gs *GatherService) monitorLoop() {
 			switch peerStatus.Alive {
 			case true:
 				// TODO: rename ID to Peer
-				if _, exists := gs.mesh[gs.h.ID()]; !exists {
-					gs.mesh[gs.h.ID()] = make(map[peer.ID]struct{})
-				}
-
-				if _, exists := gs.mesh[peerStatus.ID]; !exists {
-					gs.mesh[peerStatus.ID] = make(map[peer.ID]struct{})
-				}
-
-				gs.mesh[gs.h.ID()][peerStatus.ID] = struct{}{}
-				gs.mesh[peerStatus.ID][gs.h.ID()] = struct{}{}
+                gs.meshCh <- addDoubleEdge(gs.h.ID(), peerStatus.ID)
 				fmt.Printf("PEER ALIVE %v\n", peerStatus.ID)
 
 				err := gs.askEverybodyToConnectTo(peerStatus.ID)
@@ -231,14 +256,17 @@ func (gs *GatherService) monitorLoop() {
 					fmt.Printf("EVTC %v\n", err)
 				}
 			case false:
-				delete(gs.mesh[gs.h.ID()], peerStatus.ID)
-				delete(gs.mesh[peerStatus.ID], gs.h.ID())
+                gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.ID)
+
+                /*
+                The main stream may still be alive
 
 				gs.streams[peerStatus.ID].Close()
 				delete(gs.streams, peerStatus.ID)
 
 				gs.conns[peerStatus.ID].Close()
 				delete(gs.conns, peerStatus.ID)
+                */
 
 				fmt.Printf("PEER DEAD %v\n", peerStatus.ID)
 			}
@@ -323,6 +351,7 @@ func (gs *GatherService) Close() {
 	gs.cancel()
 	<-gs.publishDone
 	<-gs.monitorDone
+    <-gs.meshUpdateDone
 
 	close(gs.localConnUpdates)
 
