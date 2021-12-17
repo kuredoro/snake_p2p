@@ -17,8 +17,14 @@ import (
 
 const SendEvery = time.Second
 
+func HostAddrInfo(h host.Host) *peer.AddrInfo {
+    return &peer.AddrInfo{
+        ID: h.ID(),
+        Addrs: h.Addrs(),
+    }
+}
+
 func main() {
-    tagFlag := flag.String("tag", "", "a tag that will be appended to the messages published into the network")
 
     // Set up host
     fmt.Print("Setting up host...")
@@ -47,13 +53,8 @@ func main() {
         os.Exit(1)
     }
 
-    tag := *tagFlag
-    if tag == "" {
-        tag = h.ID().ShortString()
-    }
-
     fmt.Print("Joining the network...")
-    m, err := JoinNetwork(ctx, ps, h.ID(), tag)
+    m, err := JoinNetwork(ctx, ps, HostAddrInfo(h))
     if err != nil {
         printErr("join the network:", err)
         os.Exit(1)
@@ -65,7 +66,7 @@ func main() {
     for {
         select {
         case msg := <-m.Messages:
-            fmt.Printf("MSG %v %v\n", msg.Tag, msg.Timestamp)
+            fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
         case <-timer.C:
             m.Publish(time.Now())
             timer.Reset(SendEvery)
@@ -85,12 +86,11 @@ type NetworkMember struct {
     ps *pubsub.PubSub
     topic *pubsub.Topic
     sub *pubsub.Subscription
-    selfID peer.ID
-    tag string
+    addrInfo *peer.AddrInfo
     Messages chan *GatherPointMessage
 }
 
-func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfID peer.ID, tag string) (*NetworkMember, error) {
+func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfInfo *peer.AddrInfo) (*NetworkMember, error) {
     topic, err := ps.Join("snake_test")
     if err != nil {
         return nil, fmt.Errorf("join topic %q: %v", "snake_test", topic)
@@ -106,8 +106,7 @@ func JoinNetwork(ctx context.Context, ps *pubsub.PubSub, selfID peer.ID, tag str
         ps: ps,
         topic: topic,
         sub: sub,
-        selfID: selfID,
-        tag: tag,
+        addrInfo: selfInfo,
         Messages: make(chan *GatherPointMessage, 32),
     }
 
@@ -124,7 +123,7 @@ func (nm *NetworkMember) readLoop() {
             return
         }
 
-        if psMsg.ReceivedFrom == nm.selfID {
+        if psMsg.ReceivedFrom == nm.addrInfo.ID {
             continue
         }
 
@@ -142,6 +141,7 @@ func (nm *NetworkMember) readLoop() {
 
 func (nm *NetworkMember) Publish(timestamp time.Time) error {
     msg := GatherPointMessage{
+        ConnectTo: nm.addrInfo,
         TTL: time.Minute,
         DesiredPlayerCount: 3,
         CurrentPlayerCount: 0,
