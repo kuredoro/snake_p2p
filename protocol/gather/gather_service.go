@@ -26,94 +26,94 @@ type peerMesh map[peer.ID]map[peer.ID]struct{}
 type peerMeshMod func(peerMesh) bool
 
 func addEdge(from, to peer.ID) peerMeshMod {
-    return func(mesh peerMesh) bool {
-        if _, exists := mesh[from]; !exists {
-            mesh[from] = make(map[peer.ID]struct{})
-        }
+	return func(mesh peerMesh) bool {
+		if _, exists := mesh[from]; !exists {
+			mesh[from] = make(map[peer.ID]struct{})
+		}
 
-        mesh[from][to] = struct{}{}
-        return true
-    }
+		mesh[from][to] = struct{}{}
+		return true
+	}
 }
 
 func removeEdge(from, to peer.ID) peerMeshMod {
-    return func(mesh peerMesh) bool {
-        delete(mesh[from], to)
-        return false
-    }
+	return func(mesh peerMesh) bool {
+		delete(mesh[from], to)
+		return false
+	}
 }
 
 func addDoubleEdge(from, to peer.ID) peerMeshMod {
-    return func(mesh peerMesh) bool {
-        addEdge(from, to)(mesh)
-        addEdge(to, from)(mesh)
-        return true
-    }
+	return func(mesh peerMesh) bool {
+		addEdge(from, to)(mesh)
+		addEdge(to, from)(mesh)
+		return true
+	}
 }
 
 func removeDoubleEdge(from, to peer.ID) peerMeshMod {
-    return func(mesh peerMesh) bool {
-        removeEdge(from, to)(mesh)
-        removeEdge(to, from)(mesh)
-        return false
-    }
+	return func(mesh peerMesh) bool {
+		removeEdge(from, to)(mesh)
+		removeEdge(to, from)(mesh)
+		return false
+	}
 }
 
 func (m peerMesh) String() string {
-    var str strings.Builder
+	var str strings.Builder
 
-    index2peer := make([]peer.ID, 0, len(m))
-    for id := range m {
-        index2peer = append(index2peer, id)
-    }
+	index2peer := make([]peer.ID, 0, len(m))
+	for id := range m {
+		index2peer = append(index2peer, id)
+	}
 
-    sort.Slice(index2peer, func(i, j int) bool {
-        return index2peer[i].String() < index2peer[j].String()
-    })
+	sort.Slice(index2peer, func(i, j int) bool {
+		return index2peer[i].String() < index2peer[j].String()
+	})
 
-    peer2index := make(map[peer.ID]int)
-    for i, id := range index2peer {
-        peer2index[id] = i
-    }
+	peer2index := make(map[peer.ID]int)
+	for i, id := range index2peer {
+		peer2index[id] = i
+	}
 
-    neightbours := make([]int, 0, len(m))
-    for i, srcID := range index2peer {
-        idStr := srcID.String()
-        str.WriteString(strconv.Itoa(i))
-        str.WriteRune(' ')
-        str.WriteString(idStr[len(idStr)-6:])
-        str.WriteString(": ")
+	neightbours := make([]int, 0, len(m))
+	for i, srcID := range index2peer {
+		idStr := srcID.String()
+		str.WriteString(strconv.Itoa(i))
+		str.WriteRune(' ')
+		str.WriteString(idStr[len(idStr)-6:])
+		str.WriteString(": ")
 
-        neightbours = neightbours[:0]
-        for destID := range m[srcID] {
-            neightbours = append(neightbours, peer2index[destID])
-        }
+		neightbours = neightbours[:0]
+		for destID := range m[srcID] {
+			neightbours = append(neightbours, peer2index[destID])
+		}
 
-        sort.Ints(neightbours)
+		sort.Ints(neightbours)
 
-        for _, index := range neightbours {
-            str.WriteString(strconv.Itoa(index))
-            str.WriteRune(' ')
-        }
-        str.WriteRune('\n')
-    }
+		for _, index := range neightbours {
+			str.WriteString(strconv.Itoa(index))
+			str.WriteRune(' ')
+		}
+		str.WriteRune('\n')
+	}
 
-    return str.String()
+	return str.String()
 }
 
 type GatherService struct {
-	ctx                      context.Context
-	cancel                   func()
-	publishDone chan struct{}
-    monitorDone, meshUpdateDone chan struct{}
+	ctx                         context.Context
+	cancel                      func()
+	publishDone                 chan struct{}
+	monitorDone, meshUpdateDone chan struct{}
 
 	h       host.Host
 	streams map[peer.ID]network.Stream
 	topic   *pubsub.Topic
 	ttl     time.Duration
 
-	mesh peerMesh
-    meshCh chan peerMeshMod
+	mesh   peerMesh
+	meshCh chan peerMeshMod
 
 	ping             *ping.PingService
 	conns            map[peer.ID]*heartbeat.HeartbeatService
@@ -124,19 +124,19 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 	localCtx, cancel := context.WithCancel(ctx)
 
 	gs := &GatherService{
-		ctx:         localCtx,
-		cancel:      cancel,
-		publishDone: make(chan struct{}),
-		monitorDone: make(chan struct{}),
-        meshUpdateDone: make(chan struct{}),
+		ctx:            localCtx,
+		cancel:         cancel,
+		publishDone:    make(chan struct{}),
+		monitorDone:    make(chan struct{}),
+		meshUpdateDone: make(chan struct{}),
 
 		h:       h,
 		streams: make(map[peer.ID]network.Stream),
 		topic:   topic,
 		ttl:     TTL,
 
-		mesh: make(peerMesh),
-        meshCh: make(chan peerMeshMod),
+		mesh:   make(peerMesh),
+		meshCh: make(chan peerMeshMod),
 
 		ping:             ping,
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
@@ -147,7 +147,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 
 	go gs.publishLoop()
 	go gs.monitorLoop()
-    go gs.meshUpdateLoop()
+	go gs.meshUpdateLoop()
 
 	return gs, nil
 }
@@ -210,32 +210,31 @@ func (gs *GatherService) publish() error {
 }
 
 func (gs *GatherService) meshUpdateLoop() {
-    scanResults := make(chan struct{})
-    defer close(scanResults)
+	scanResults := make(chan struct{})
+	defer close(scanResults)
 
-    for {
-        select {
-        case <-gs.ctx.Done():
-            close(gs.meshUpdateDone)
-            return
-        case mod := <-gs.meshCh:
-            rescan := mod(gs.mesh)
+	for {
+		select {
+		case <-gs.ctx.Done():
+			close(gs.meshUpdateDone)
+			return
+		case mod := <-gs.meshCh:
+			rescan := mod(gs.mesh)
 
-            fmt.Printf("mesh update:\n%v\n", gs.mesh)
+			fmt.Printf("mesh update:\n%v\n", gs.mesh)
 
-            if !rescan {
-                continue
-            }
+			if !rescan {
+				continue
+			}
 
-            go func() {
-                time.Sleep(time.Second)
-                scanResults <- struct{}{}
-            }()
-        case <-scanResults:
-            fmt.Printf("RESCANNED\n")
-        }
-    }
-
+			go func() {
+				time.Sleep(time.Second)
+				scanResults <- struct{}{}
+			}()
+		case <-scanResults:
+			fmt.Printf("RESCANNED\n")
+		}
+	}
 }
 
 func (gs *GatherService) monitorLoop() {
@@ -248,27 +247,27 @@ func (gs *GatherService) monitorLoop() {
 			switch peerStatus.Alive {
 			case true:
 				// TODO: rename ID to Peer
-                gs.meshCh <- addDoubleEdge(gs.h.ID(), peerStatus.ID)
-				fmt.Printf("PEER ALIVE %v\n", peerStatus.ID)
+				gs.meshCh <- addDoubleEdge(gs.h.ID(), peerStatus.Peer)
+				fmt.Printf("PEER ALIVE %v\n", peerStatus.Peer)
 
-				err := gs.askEverybodyToConnectTo(peerStatus.ID)
+				err := gs.askEverybodyToConnectTo(peerStatus.Peer)
 				if err != nil {
 					fmt.Printf("EVTC %v\n", err)
 				}
 			case false:
-                gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.ID)
+				gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.Peer)
 
-                /*
-                The main stream may still be alive
+				/*
+				                The main stream may still be alive
 
-				gs.streams[peerStatus.ID].Close()
-				delete(gs.streams, peerStatus.ID)
+								gs.streams[peerStatus.ID].Close()
+								delete(gs.streams, peerStatus.ID)
 
-				gs.conns[peerStatus.ID].Close()
-				delete(gs.conns, peerStatus.ID)
-                */
+								gs.conns[peerStatus.ID].Close()
+								delete(gs.conns, peerStatus.ID)
+				*/
 
-				fmt.Printf("PEER DEAD %v\n", peerStatus.ID)
+				fmt.Printf("PEER DEAD %v\n", peerStatus.Peer)
 			}
 		}
 	}
@@ -351,7 +350,7 @@ func (gs *GatherService) Close() {
 	gs.cancel()
 	<-gs.publishDone
 	<-gs.monitorDone
-    <-gs.meshUpdateDone
+	<-gs.meshUpdateDone
 
 	close(gs.localConnUpdates)
 
