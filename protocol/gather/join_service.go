@@ -16,7 +16,7 @@ type JoinService struct {
 	stream network.Stream
 }
 
-func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService, error) {
+func NewJoinService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService, error) {
 	stream, err := h.NewStream(ctx, pID, ID)
 	if err != nil {
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
@@ -30,6 +30,8 @@ func NewSyncService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService
 
 		stream: stream,
 	}
+
+	stream.Write(nil)
 
 	go service.Run()
 

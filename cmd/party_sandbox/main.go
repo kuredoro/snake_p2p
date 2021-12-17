@@ -79,29 +79,16 @@ func main() {
 	}
 	fmt.Println("ok")
 
-	// Read from the channel and send
-	timer := time.NewTimer(SendEvery)
-	for {
-		select {
-		case msg := <-m.Messages:
-			fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
-			m.JoinGatherPoint(msg.ConnectTo)
-		case <-timer.C:
-			if !*gatherFlag {
-				continue
-			}
-
-			m.Publish(time.Now())
-			timer.Reset(SendEvery)
-		}
+	if *gatherFlag {
+		m.CreateGatherPoint(SendEvery)
 	}
-}
 
-type GatherPointMessage struct {
-	ConnectTo          peer.AddrInfo
-	TTL                time.Duration
-	DesiredPlayerCount uint
-	CurrentPlayerCount uint
+	// Read from the channel and send
+	for {
+		msg := <-m.Messages
+		fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
+		m.JoinGatherPoint(msg.ConnectTo)
+	}
 }
 
 type NetworkMember struct {
@@ -114,7 +101,7 @@ type NetworkMember struct {
 
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
-	Messages           chan *GatherPointMessage
+	Messages           chan *gather.GatherPointMessage
 }
 
 func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkMember, error) {
@@ -129,13 +116,14 @@ func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkM
 	}
 
 	nm := &NetworkMember{
-		ctx:      ctx,
-		h:        h,
-		ps:       ps,
-		topic:    topic,
-		sub:      sub,
-		addrInfo: HostAddrInfo(h),
-		Messages: make(chan *GatherPointMessage, 32),
+		ctx:                ctx,
+		h:                  h,
+		ps:                 ps,
+		topic:              topic,
+		sub:                sub,
+		addrInfo:           HostAddrInfo(h),
+		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
+		Messages:           make(chan *gather.GatherPointMessage, 32),
 	}
 
 	go nm.readLoop()
@@ -152,12 +140,23 @@ func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
 		return fmt.Errorf("join gather point: %v", err)
 	}
 
-	service, err := gather.NewSyncService(nm.ctx, nm.h, pi.ID)
+	service, err := gather.NewJoinService(nm.ctx, nm.h, pi.ID)
 	if err != nil {
-		return fmt.Errorf("create sync service for peer %v: %v", pi.ID.ShortString(), err)
+		return fmt.Errorf("create join service for peer %v: %v", pi.ID.ShortString(), err)
 	}
 
 	nm.joinedGatherPoints[pi.ID] = service
+
+	fmt.Printf("JOINED %v\n", pi.ID)
+
+	return nil
+}
+
+func (nm *NetworkMember) CreateGatherPoint(TTL time.Duration) (err error) {
+	nm.gatherService, err = gather.NewGatherService(nm.ctx, nm.h, nm.topic, SendEvery)
+	if err != nil {
+		return fmt.Errorf("create gather point: %v", err)
+	}
 
 	return nil
 }
@@ -177,7 +176,7 @@ func (nm *NetworkMember) readLoop() {
 
 		fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
 
-		msg := &GatherPointMessage{}
+		msg := &gather.GatherPointMessage{}
 		if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
 			cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unmarshal %q\n", string(psMsg.Data))
 			continue
@@ -185,27 +184,6 @@ func (nm *NetworkMember) readLoop() {
 
 		nm.Messages <- msg
 	}
-}
-
-func (nm *NetworkMember) Publish(timestamp time.Time) error {
-	msg := GatherPointMessage{
-		ConnectTo:          *nm.addrInfo,
-		TTL:                time.Minute,
-		DesiredPlayerCount: 3,
-		CurrentPlayerCount: 0,
-	}
-
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("marshal: %v", err)
-	}
-
-	err = nm.topic.Publish(nm.ctx, msgBytes)
-	if err != nil {
-		return fmt.Errorf("publish: %v", err)
-	}
-
-	return nil
 }
 
 func printErr(m string, args ...interface{}) {
