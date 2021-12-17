@@ -25,8 +25,9 @@ type PeerStatus struct {
 }
 
 type HeartbeatService struct {
-	ctx   context.Context
-	Close func()
+	ctx    context.Context
+	cancel func()
+	done   chan struct{}
 
 	ping *ping.PingService
 	peer peer.ID
@@ -44,10 +45,12 @@ func NewHeartbeat(ctx context.Context, ping *ping.PingService, p peer.ID, outCh 
 	localCtx, cancel := context.WithCancel(ctx)
 
 	hb := &HeartbeatService{
-		ctx:   localCtx,
-		Close: cancel,
-		ping:  ping,
-		peer:  p,
+		ctx:    localCtx,
+		cancel: cancel,
+		done:   make(chan struct{}),
+
+		ping: ping,
+		peer: p,
 
 		peerStatus: unknown,
 
@@ -64,16 +67,21 @@ func (h *HeartbeatService) run() {
 		res := <-h.ping.Ping(h.ctx, h.peer)
 
 		if h.ctx.Err() != nil {
+			close(h.done)
 			return
 		}
 
-		if res.Error != nil && h.peerStatus != dead {
-			h.reportCh <- PeerStatus{
-				ID:    h.peer,
-				Alive: false,
+		if res.Error != nil {
+			if h.peerStatus != dead {
+				h.reportCh <- PeerStatus{
+					ID:    h.peer,
+					Alive: false,
+				}
+
+				h.peerStatus = dead
 			}
 
-			h.peerStatus = dead
+			time.Sleep(HeartbeatEvery)
 			continue
 		}
 
@@ -95,4 +103,9 @@ func (h *HeartbeatService) run() {
 		// exactly will clutter this function, which doesn't seem worth it.
 		time.Sleep(HeartbeatEvery)
 	}
+}
+
+func (h *HeartbeatService) Close() {
+	h.cancel()
+	<-h.done
 }
