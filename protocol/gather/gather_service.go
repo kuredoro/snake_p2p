@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -16,8 +17,9 @@ import (
 )
 
 type GatherService struct {
-	ctx    context.Context
-	cancel func()
+	ctx                      context.Context
+	cancel                   func()
+	publishDone, monitorDone chan struct{}
 
 	h       host.Host
 	streams map[peer.ID]network.Stream
@@ -35,8 +37,10 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 	localCtx, cancel := context.WithCancel(ctx)
 
 	gs := &GatherService{
-		ctx:    localCtx,
-		cancel: cancel,
+		ctx:         localCtx,
+		cancel:      cancel,
+		publishDone: make(chan struct{}),
+		monitorDone: make(chan struct{}),
 
 		h:       h,
 		streams: make(map[peer.ID]network.Stream),
@@ -81,6 +85,7 @@ func (gs *GatherService) publishLoop() {
 			}
 			timer.Reset(gs.ttl)
 		case <-gs.ctx.Done():
+			close(gs.publishDone)
 			return
 		}
 	}
@@ -111,10 +116,12 @@ func (gs *GatherService) publish() error {
 
 	return nil
 }
+
 func (gs *GatherService) monitorLoop() {
 	for {
 		select {
 		case <-gs.ctx.Done():
+			close(gs.monitorDone)
 			return
 		case peerStatus := <-gs.localConnUpdates:
 			switch peerStatus.Alive {
@@ -137,5 +144,29 @@ func (gs *GatherService) monitorLoop() {
 				fmt.Printf("PEER DEAD %v\n", peerStatus.ID)
 			}
 		}
+	}
+}
+
+func (gs *GatherService) Close() {
+	var wg sync.WaitGroup
+	wg.Add(len(gs.conns))
+
+	for _, hb := range gs.conns {
+		go func(hb *heartbeat.HeartbeatService) {
+			hb.Close()
+			wg.Done()
+		}(hb)
+	}
+
+	wg.Wait()
+
+	gs.cancel()
+	<-gs.publishDone
+	<-gs.monitorDone
+
+	close(gs.localConnUpdates)
+
+	for _, s := range gs.streams {
+		s.Close()
 	}
 }
