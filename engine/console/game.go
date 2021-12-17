@@ -226,7 +226,7 @@ func (game *Game) RunGame() {
 	if err := s.Init(); err != nil {
 		log.Fatalf("%+v", err)
 	}
-	s.EnableMouse()
+	s.DisableMouse()
 	s.EnablePaste()
 	s.Clear()
 	s.SetStyle(defStyle)
@@ -276,7 +276,7 @@ func (game *Game) RunGame() {
 		}
 
 		// Draw Game state
-		s.Clear()
+		//s.Clear()
 		if game.Over {
 			drawBox(s, boundary, boxStyle)
 			width, height := 12, 0
