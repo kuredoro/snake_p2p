@@ -11,7 +11,6 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
     pubsub "github.com/libp2p/go-libp2p-pubsub"
     "github.com/i582/cfmt/cmd/cfmt"
 )
@@ -72,23 +71,6 @@ func main() {
             timer.Reset(SendEvery)
         }
     }
-}
-
-type discoveryNotifee struct {
-    h host.Host
-}
-
-func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
-    fmt.Printf("NEW peer: %v\n", pi)
-    err := n.h.Connect(context.Background(), pi)
-    if err != nil {
-        fmt.Printf("ERR connecting to peer %v: %v\n", pi.ID.Pretty(), err)
-    }
-}
-
-func setupDiscovery(h host.Host) error {
-    s := mdns.NewMdnsService(h, "snake_test", &discoveryNotifee{h})
-    return s.Start()
 }
 
 type Message struct {
