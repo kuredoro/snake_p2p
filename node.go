@@ -43,6 +43,8 @@ type Node struct {
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
 	GatherPoints       chan *gather.GatherPointMessage
+	EstablishedGames   chan GameEstablished
+	gameProxyCh        chan GameEstablished
 }
 
 func New(ctx context.Context) (*Node, error) {
@@ -89,6 +91,8 @@ func New(ctx context.Context) (*Node, error) {
 		ping:               ping.NewPingService(h),
 		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
 		GatherPoints:       make(chan *gather.GatherPointMessage, 32),
+		EstablishedGames:   make(chan GameEstablished),
+		gameProxyCh:        make(chan GameEstablished),
 	}
 
 	go n.readLoop()
@@ -181,6 +185,18 @@ func (n *Node) readLoop() {
 			}
 
 			n.GatherPoints <- msg
+		case info := <-n.gameProxyCh:
+			if n.gatherService != nil {
+				n.gatherService.Close()
+			}
+
+			for _, s := range n.joinedGatherPoints {
+				s.Close()
+			}
+
+			n.joinedGatherPoints = make(map[peer.ID]*gather.JoinService)
+
+			n.EstablishedGames <- info
 		}
 	}
 }
