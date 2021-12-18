@@ -11,8 +11,6 @@ import (
 )
 
 type GatherPointBeacon struct {
-	ctx    context.Context
-	cancel context.CancelFunc
 	done   chan struct{}
 
 	ttl      time.Duration
@@ -21,11 +19,7 @@ type GatherPointBeacon struct {
 }
 
 func NewGatherPointBeacon(ctx context.Context, topic *pubsub.Topic, self peer.AddrInfo, TTL time.Duration) *GatherPointBeacon {
-	localCtx, cancel := context.WithCancel(ctx)
-
 	b := &GatherPointBeacon{
-		ctx:    localCtx,
-		cancel: cancel,
 		done:   make(chan struct{}),
 
 		ttl:      TTL,
@@ -38,18 +32,8 @@ func NewGatherPointBeacon(ctx context.Context, topic *pubsub.Topic, self peer.Ad
 	return b
 }
 
-func (b *GatherPointBeacon) Done() <-chan struct{} {
-	if b == nil {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}
-
-	return b.done
-}
-
 func (b *GatherPointBeacon) Close() {
-	b.cancel()
+    b.done <- struct{}{}
 	<-b.done
 }
 
@@ -58,15 +42,24 @@ func (b *GatherPointBeacon) publishLoop() {
 
 	for {
 		select {
+        case <-b.done:
+			close(b.done)
+			return
 		case <-timer.C:
+            // TODO: if timer expires we publish the message, but what
+            // if during the publishing user calls Close?
+            // Maybe we should propagate context here?
+            // THough only if it is a concern...
 			err := b.publish()
 			if err != nil {
 				fmt.Printf("gather service: announce: %v\n", err)
 			}
+
+            // TODO: if b.publish takes a long time to send, then
+            // we will send a new message after 2*ttl seconds in the
+            // worst case. We can track time publish took and adjust
+            // the timer appropriately.
 			timer.Reset(b.ttl)
-		case <-b.ctx.Done():
-			close(b.done)
-			return
 		}
 	}
 }
@@ -84,7 +77,10 @@ func (b *GatherPointBeacon) publish() error {
 		return fmt.Errorf("marshal gather point messasge: %v", err)
 	}
 
-	err = b.topic.Publish(b.ctx, msgBytes)
+    ctx, cancel := context.WithTimeout(context.Background(), b.ttl)
+    defer cancel()
+
+	err = b.topic.Publish(ctx, msgBytes)
 	if err != nil {
 		return fmt.Errorf("publish gather point message: %v", err)
 	}
