@@ -59,13 +59,23 @@ func NewHeartbeat(ping *ping.PingService, p peer.ID, outCh chan PeerStatus) (*He
 func (h *HeartbeatService) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// fakeCh will never transmit anything, if anyone would want to receive
+	// from it, they would block forever.
+	// XXX: seems like a generic primitive and I've never seen it beeing used,
+	// so it is probably an incorrect usage.
+	fakeCh := make(chan ping.Result)
+	defer close(fakeCh)
+
+	resCh := h.ping.Ping(ctx, h.peer)
+
+	timer := time.NewTimer(HeartbeatEvery)
 	for {
 		select {
 		case <-h.done:
 			cancel()
 			close(h.done)
 			return
-		case res := <-h.ping.Ping(ctx, h.peer):
+		case res := <-resCh:
 			if res.Error != nil {
 				if h.peerStatus != dead {
 					h.reportCh <- PeerStatus{
@@ -76,7 +86,7 @@ func (h *HeartbeatService) run() {
 					h.peerStatus = dead
 				}
 
-				time.Sleep(HeartbeatEvery)
+				resCh = fakeCh
 				continue
 			}
 
@@ -89,14 +99,12 @@ func (h *HeartbeatService) run() {
 				h.peerStatus = alive
 			}
 
-			// Note: sleeping here for HeartbeatEvery seconds makes heartbeats
-			// fire a bit less frequently than desired. That's because we do
-			// not take away the amount of time Ping has taken from the
-			// HeartbeatEvery, so the heartbeat is fired every HeartbeatEvery +
-			// 'how much Ping has taken'. Since Ping has a timeout, the heartbeat
-			// will be fired eventually, but making it fire every HeartbeatEvery
-			// exactly will clutter this function, which doesn't seem worth it.
-			time.Sleep(HeartbeatEvery)
+			resCh = fakeCh
+		case <-timer.C:
+			cancel()
+			ctx, cancel = context.WithCancel(context.Background())
+
+			resCh = h.ping.Ping(ctx, h.peer)
 		}
 	}
 }
