@@ -156,6 +156,8 @@ func (js *JoinService) sendConnected(p peer.ID) error {
 		return fmt.Errorf("marshal: %v", err)
 	}
 
+	raw = append(raw, '\n')
+
 	_, err = js.stream.Write(raw)
 	if err != nil {
 		return fmt.Errorf("write: %v", err)
@@ -176,6 +178,8 @@ func (js *JoinService) sendDisconnected(p peer.ID) error {
 	if err != nil {
 		return fmt.Errorf("marshal: %v", err)
 	}
+
+	raw = append(raw, '\n')
 
 	_, err = js.stream.Write(raw)
 	if err != nil {
