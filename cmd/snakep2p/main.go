@@ -72,8 +72,10 @@ func eventsSequence(game *console.Game) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	// Test tview
+	console.TviewTest()
 	// Create Game
-	game := console.GameInit(make(chan interface{}, 1))
-	go eventsSequence(game)
-	game.RunGame()
+	//game := console.GameInit(make(chan interface{}, 1))
+	//go eventsSequence(game)
+	//game.RunGame()
 }
