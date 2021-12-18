@@ -12,6 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type JoinService struct {
@@ -23,6 +25,8 @@ type JoinService struct {
 	conns        map[peer.ID]*heartbeat.HeartbeatService
 	connHealthCh chan heartbeat.PeerStatus
 
+	log zerolog.Logger
+
 	gameCh chan<- core.GameEstablished
 }
 
@@ -32,6 +36,8 @@ func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pI
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
 	}
 
+	logger := log.Logger.With().Str("facilitator", pID.Pretty()).Logger()
+
 	service := &JoinService{
 		done: make(chan struct{}),
 
@@ -40,6 +46,8 @@ func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pI
 		stream:       stream,
 		conns:        make(map[peer.ID]*heartbeat.HeartbeatService),
 		connHealthCh: make(chan heartbeat.PeerStatus),
+
+		log: logger,
 
 		gameCh: gameCh,
 	}
@@ -63,9 +71,6 @@ func (js *JoinService) run() {
 
 	go scan()
 
-	errCh := make(chan error)
-	defer close(errCh)
-
 	// XXX: I'm so hungry...
 	// What is the proper way to handle this interdependency between
 	// reading and exiting. So much to learn....
@@ -87,7 +92,6 @@ func (js *JoinService) run() {
 			close(js.done)
 			return
 		case status := <-js.connHealthCh:
-			fmt.Printf("HEALTH %v\n", status)
 			switch status.Alive {
 			case true:
 				// TODO: research best practices for handling sending and
@@ -97,16 +101,28 @@ func (js *JoinService) run() {
 				// have to write a boilerplate wrapper around the funcs.
 				// What will befnefit us in a long run, I wonder...
 				go func() {
+					js.log.Info().
+						Str("seeker", status.Peer.Pretty()).
+						Msg("New game connection with peer seeker")
+
 					err := js.sendConnected(status.Peer)
 					if err != nil {
-						errCh <- fmt.Errorf("send connected: %v", err)
+						js.log.Err(err).
+							Str("seeker", status.Peer.Pretty()).
+							Msg("Notify about new seeker-seeker connection")
 					}
 				}()
 			case false:
 				go func() {
+					js.log.Info().
+						Str("seeker", status.Peer.Pretty()).
+						Msg("Peer seeker game connection reset")
+
 					err := js.sendDisconnected(status.Peer)
 					if err != nil {
-						errCh <- fmt.Errorf("send disconnected: %v", err)
+						js.log.Err(err).
+							Str("seeker", status.Peer.Pretty()).
+							Msg("Notify about seeker-seeker connection reset")
 					}
 				}()
 			}
@@ -115,7 +131,7 @@ func (js *JoinService) run() {
 				reading = false
 				err := js.stream.Close()
 				if err != nil {
-					fmt.Printf("ERR join service: close: %v\n", err)
+					js.log.Err(err).Msg("Close stream")
 				}
 
 				// Do not scan() again
@@ -125,29 +141,39 @@ func (js *JoinService) run() {
 			var msg GatherMessage
 			err := json.Unmarshal(scanner.Bytes(), &msg)
 			if err != nil {
-				fmt.Printf("BAD MSG %q\n", scanner.Text())
+				js.log.Err(err).
+					Str("text", fmt.Sprintf("%q", scanner.Text())).
+					Msg("Received junk from facilitator")
 				go scan()
 				continue
 			}
 
 			switch msg.Type {
 			case ConnectionRequest:
-				fmt.Printf("CONN REQUEST to %v\n", msg.Addrs[0].ID)
 				go func() {
 					if len(msg.Addrs) == 0 {
-						errCh <- fmt.Errorf("connection request does not list peers")
+						js.log.Warn().
+							Msg("Received connection request does not list peers")
 						return
 					}
+
+					js.log.Info().
+						Str("to", msg.Addrs[0].ID.Pretty()).
+						Msg("Seeker-seeker connection request")
+
 					// TODO: handle concurrent map access
 					err := js.connect(msg.Addrs[0])
 					if err != nil {
-						errCh <- fmt.Errorf("connect to %v: %v", msg.Addrs[0].ID, err)
+						js.log.Err(err).
+							Str("to", msg.Addrs[0].ID.Pretty()).
+							Msg("Connect to peer seeker")
 					}
 				}()
 			case GatheringFinished:
 				err := js.stream.Close()
 				if err != nil {
-					fmt.Printf("FIN error: close: %v\n", err)
+					js.log.Err(err).
+						Msg("Reset stream")
 				}
 
 				foundMyself := false
@@ -167,18 +193,20 @@ func (js *JoinService) run() {
 					continue
 				}
 
-				fmt.Printf("YAAAY\n")
+				js.log.Info().
+					Msg("Chosen for a game")
+
 				js.gameCh <- core.GameEstablished{
 					Facilitator: js.stream.Conn().RemotePeer(),
 				}
 				continue
 			default:
-				fmt.Printf("BAD TYPE %#v", msg)
+				js.log.Warn().
+					Int("type", int(msg.Type)).
+					Msg("Received message of unknown type")
 			}
 
 			go scan()
-		case err := <-errCh:
-			fmt.Printf("ERR JOIN %v\n", err)
 		}
 	}
 }
@@ -196,7 +224,10 @@ func (js *JoinService) Close() {
 }
 
 func (js *JoinService) sendConnected(p peer.ID) error {
-	fmt.Printf("CONNECTED %v\n", p)
+	log.Info().
+		Str("to", p.Pretty()).
+		Str("facilitator", js.stream.Conn().RemotePeer().Pretty()).
+		Msg("Send seeker connected message")
 
 	msg := GatherMessage{
 		Type:  Connected,
@@ -219,7 +250,10 @@ func (js *JoinService) sendConnected(p peer.ID) error {
 }
 
 func (js *JoinService) sendDisconnected(p peer.ID) error {
-	fmt.Printf("DISCONNECTED %v\n", p)
+	log.Info().
+		Str("from", p.Pretty()).
+		Str("facilitator", js.stream.Conn().RemotePeer().Pretty()).
+		Msg("Send seeker disconnected message")
 
 	msg := GatherMessage{
 		Type:  Disconnected,

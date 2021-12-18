@@ -17,6 +17,8 @@ import (
 
 	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
+
+	"github.com/rs/zerolog/log"
 )
 
 type PeerError struct {
@@ -97,14 +99,14 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 		return
 	}
 
-	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
+	peer := stream.Conn().RemotePeer()
+	log.Info().Str("id", peer.Pretty()).Msg("Seeker connected")
 
 	hb, err := heartbeat.NewHeartbeat(gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
 	if err != nil {
 		panic(err)
 	}
 
-	peer := stream.Conn().RemotePeer()
 	gs.streams[peer] = stream
 	gs.conns[peer] = hb
 
@@ -127,15 +129,14 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 		select {
 		case ok := <-readCh:
 			if !ok {
-				fmt.Printf("Not ok\n")
+				log.Info().Str("id", peer.Pretty()).Msg("Seeker withdrawn")
 				return
 			}
-			fmt.Printf("READ\n")
 
 			var msg GatherMessage
 			err := json.Unmarshal(scanner.Bytes(), &msg)
 			if err != nil {
-				fmt.Printf("ERR FROM %s: %v\n", remotePeer, err)
+				log.Warn().Err(err).Str("seeker", remotePeer.Pretty()).Msg("Unmarshal JSON")
 				go scan()
 				continue
 			}
@@ -143,20 +144,37 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 			switch msg.Type {
 			case Connected:
 				if len(msg.Addrs) == 0 {
-					fmt.Printf("WAT empty msg addrs from %s for CONN\n", remotePeer)
+					log.Warn().
+						Str("seeker", remotePeer.Pretty()).
+						Msg("Seeker-seeker connection message lists no peers")
 					break
 				}
-				fmt.Printf("CONN %s <-> %s\n", remotePeer, msg.Addrs[0].ID)
+
+				log.Info().
+					Str("from", remotePeer.Pretty()).
+					Str("to", msg.Addrs[0].ID.Pretty()).
+					Msg("New seeker-seeker connection")
+
 				gs.meshCh <- addDoubleEdge(remotePeer, msg.Addrs[0].ID)
 			case Disconnected:
 				if len(msg.Addrs) == 0 {
-					fmt.Printf("WAT empty msg addrs from %s for DISC\n", remotePeer)
+					log.Warn().
+						Str("seeker", remotePeer.Pretty()).
+						Msg("Seeker-seeker connection reset message lists no peers")
 					break
 				}
-				fmt.Printf("DISC %s <-> %s\n", remotePeer, msg.Addrs[0].ID)
+
+				log.Info().
+					Str("from", remotePeer.Pretty()).
+					Str("to", msg.Addrs[0].ID.Pretty()).
+					Msg("Seeker-seeker connection reset")
+
 				gs.meshCh <- removeDoubleEdge(remotePeer, msg.Addrs[0].ID)
 			default:
-				fmt.Printf("WAT\n")
+				log.Warn().
+					Str("seeker", remotePeer.Pretty()).
+					Int("type", int(msg.Type)).
+					Msg("Gathering message of unknown type")
 			}
 
 			go scan()
@@ -176,7 +194,7 @@ func (gs *GatherService) meshUpdateLoop() {
 		case mod := <-gs.meshCh:
 			rescan := mod(gs.mesh)
 
-			fmt.Printf("mesh update:\n%v\n", gs.mesh)
+			log.Debug().Msgf("Mesh updated:\n%v", gs.mesh)
 
 			if !rescan {
 				continue
@@ -184,11 +202,11 @@ func (gs *GatherService) meshUpdateLoop() {
 
 			clique := gs.mesh.FindClique(4, gs.h.ID())
 			if clique == nil {
-				fmt.Printf("NO CLIQUES FOUND\n")
+				log.Debug().Msg("No cliques found")
 				continue
 			}
 
-			fmt.Printf("CLIQUE FOUND %v\n", clique)
+			log.Info().Msgf("Clique found %v", clique)
 
 			gs.done = true
 
@@ -212,13 +230,13 @@ func (gs *GatherService) meshUpdateLoop() {
 			var wg sync.WaitGroup
 			wg.Add(len(gs.streams))
 			for id, stream := range gs.streams {
-				go func(id string, s network.Stream) {
+				go func(id peer.ID, s network.Stream) {
 					_, err := s.Write(raw)
 					if err != nil {
-						fmt.Printf("NOTIF ERR %s: %v\n", id, err)
+						log.Err(err).Str("seeker", id.Pretty()).Msg("Send gathering finished message")
 					}
 					wg.Done()
-				}(id.Pretty(), stream)
+				}(id, stream)
 			}
 
 			wg.Wait()
@@ -250,14 +268,20 @@ func (gs *GatherService) monitorLoop() {
 			case true:
 				// TODO: rename ID to Peer
 				gs.meshCh <- addDoubleEdge(gs.h.ID(), peerStatus.Peer)
-				fmt.Printf("PEER ALIVE %v\n", peerStatus.Peer)
+
+				log.Info().
+					Str("seeker", peerStatus.Peer.Pretty()).
+					Msg("Facilitator-seeker connection established")
 
 				err := gs.askEverybodyToConnectTo(peerStatus.Peer)
 				if err != nil {
 					merr := err.(*multierror.Error)
-					for _, peerErr := range merr.Errors {
-						gs.peerDisconnected(peerErr.(*PeerError).Peer)
-						fmt.Printf("ASK ERR %v\n", peerErr)
+					for _, err := range merr.Errors {
+						peerErr := err.(*PeerError)
+						gs.peerDisconnected(peerErr.Peer)
+						log.Err(peerErr.Err).
+							Str("seeker", peerErr.Peer.Pretty()).
+							Msg("Request seeker-seeker connection")
 					}
 				}
 			case false:
@@ -269,7 +293,9 @@ func (gs *GatherService) monitorLoop() {
 
 				*/
 
-				fmt.Printf("PEER DEAD %v\n", peerStatus.Peer)
+				log.Info().
+					Str("seeker", peerStatus.Peer.Pretty()).
+					Msg("Facilitator-seeker connection reset")
 			}
 		}
 	}
@@ -297,11 +323,16 @@ func (gs *GatherService) askEverybodyToConnectTo(peer peer.ID) (merr error) {
 		if srcID == peer || srcID == gs.h.ID() {
 			continue
 		}
-		fmt.Printf("Asking %v\n", srcID)
+		log.Debug().
+			Str("from", srcID.Pretty()).
+			Str("to", peer.Pretty()).
+			Msg("Requesting seeker-seeker connection")
 
 		stream, ok := gs.streams[srcID]
 		if !ok {
-			fmt.Printf("WAT peer is present in the mesh, but has no stream... ID %v\n", srcID)
+			log.Error().
+				Str("seeker", srcID.Pretty()).
+				Msg("Mesh lists a connected for which there's no stream")
 			continue
 		}
 
@@ -313,9 +344,16 @@ func (gs *GatherService) askEverybodyToConnectTo(peer peer.ID) (merr error) {
 	}
 
 	// Sanity check
-	if msgCount != len(gs.mesh)-2 {
-		fmt.Printf("WAT going to notify %d peers, but expected %d\n", msgCount, len(gs.streams)-2)
-	}
+	/* Doesn't work right now (expected is wrong)
+	    // TODO: Think about the logic and concurrency here...
+		expectedCount := len(gs.mesh) - 1
+		if msgCount != expectedCount {
+			log.Warn().
+				Int("count", msgCount).
+				Int("expected", expectedCount).
+				Msg("Expected to ask to connected a different number of peers")
+		}
+	*/
 
 	for i := 0; i < msgCount; i++ {
 		err := <-errCh
