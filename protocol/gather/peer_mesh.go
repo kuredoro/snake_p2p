@@ -48,6 +48,22 @@ func removeDoubleEdge(from, to peer.ID) peerMeshMod {
 	}
 }
 
+func removePeer(p peer.ID) peerMeshMod {
+	return func(mesh peerMesh) bool {
+		neighs, exists := mesh[p]
+		if !exists {
+			return false
+		}
+
+		for n := range neighs {
+			delete(mesh[n], p)
+		}
+
+		delete(mesh, p)
+		return false
+	}
+}
+
 func (m peerMesh) String() string {
 	var str strings.Builder
 
