@@ -94,7 +94,7 @@ func main() {
 	for {
 		select {
 		case msg := <-m.Messages:
-			fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
+			// fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
 			err := m.JoinGatherPoint(ctx, msg.ConnectTo)
 			if err != nil {
 				fmt.Printf("ERR join gather point: %v\n", err)
@@ -121,7 +121,9 @@ type NetworkMember struct {
 
 func (nm *NetworkMember) Close() {
 	fmt.Println("start 1")
-	nm.gatherService.Close()
+	if nm.gatherService != nil {
+		nm.gatherService.Close()
+	}
 	fmt.Println("end 2")
 	for i, js := range nm.joinedGatherPoints {
 		fmt.Println("start", i)
@@ -166,7 +168,7 @@ func (nm *NetworkMember) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) 
 		return fmt.Errorf("join gather point: %v", err)
 	}
 
-	service, err := gather.NewJoinService(ctx, nm.h, pi.ID)
+	service, err := gather.NewJoinService(ctx, nm.h, nm.ping, pi.ID)
 	if err != nil {
 		return fmt.Errorf("create join service for peer %v: %v", pi.ID.ShortString(), err)
 	}
@@ -200,7 +202,7 @@ func (nm *NetworkMember) readLoop() {
 			continue
 		}
 
-		fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
+		// fmt.Printf("From %v, ReceivedFrom %v\n", psMsg.GetFrom(), psMsg.ReceivedFrom)
 
 		msg := &gather.GatherPointMessage{}
 		if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
