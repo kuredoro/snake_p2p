@@ -11,16 +11,16 @@ import (
 )
 
 type GatherPointBeacon struct {
-	done   chan struct{}
+	done chan struct{}
 
 	ttl      time.Duration
 	selfInfo peer.AddrInfo
 	topic    *pubsub.Topic
 }
 
-func NewGatherPointBeacon(ctx context.Context, topic *pubsub.Topic, self peer.AddrInfo, TTL time.Duration) *GatherPointBeacon {
+func NewGatherPointBeacon(topic *pubsub.Topic, self peer.AddrInfo, TTL time.Duration) *GatherPointBeacon {
 	b := &GatherPointBeacon{
-		done:   make(chan struct{}),
+		done: make(chan struct{}),
 
 		ttl:      TTL,
 		selfInfo: self,
@@ -33,7 +33,7 @@ func NewGatherPointBeacon(ctx context.Context, topic *pubsub.Topic, self peer.Ad
 }
 
 func (b *GatherPointBeacon) Close() {
-    b.done <- struct{}{}
+	b.done <- struct{}{}
 	<-b.done
 }
 
@@ -42,23 +42,23 @@ func (b *GatherPointBeacon) publishLoop() {
 
 	for {
 		select {
-        case <-b.done:
+		case <-b.done:
 			close(b.done)
 			return
 		case <-timer.C:
-            // TODO: if timer expires we publish the message, but what
-            // if during the publishing user calls Close?
-            // Maybe we should propagate context here?
-            // THough only if it is a concern...
+			// TODO: if timer expires we publish the message, but what
+			// if during the publishing user calls Close?
+			// Maybe we should propagate context here?
+			// THough only if it is a concern...
 			err := b.publish()
 			if err != nil {
 				fmt.Printf("gather service: announce: %v\n", err)
 			}
 
-            // TODO: if b.publish takes a long time to send, then
-            // we will send a new message after 2*ttl seconds in the
-            // worst case. We can track time publish took and adjust
-            // the timer appropriately.
+			// TODO: if b.publish takes a long time to send, then
+			// we will send a new message after 2*ttl seconds in the
+			// worst case. We can track time publish took and adjust
+			// the timer appropriately.
 			timer.Reset(b.ttl)
 		}
 	}
@@ -77,8 +77,8 @@ func (b *GatherPointBeacon) publish() error {
 		return fmt.Errorf("marshal gather point messasge: %v", err)
 	}
 
-    ctx, cancel := context.WithTimeout(context.Background(), b.ttl)
-    defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), b.ttl)
+	defer cancel()
 
 	err = b.topic.Publish(ctx, msgBytes)
 	if err != nil {

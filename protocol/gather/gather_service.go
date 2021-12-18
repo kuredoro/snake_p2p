@@ -1,7 +1,6 @@
 package gather
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -126,7 +125,7 @@ type GatherService struct {
 	beacon *GatherPointBeacon
 }
 
-func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
+func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
 	gs := &GatherService{
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
@@ -143,7 +142,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
 		localConnUpdates: make(chan heartbeat.PeerStatus),
 
-		beacon: NewGatherPointBeacon(context.TODO(), topic, *HostAddrInfo(h), TTL),
+		beacon: NewGatherPointBeacon(topic, *HostAddrInfo(h), TTL),
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
@@ -157,7 +156,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 func (gs *GatherService) GatherHandler(stream network.Stream) {
 	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
 
-	hb, err := heartbeat.NewHeartbeat(context.TODO(), gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
+	hb, err := heartbeat.NewHeartbeat(gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
 	if err != nil {
 		panic(err)
 	}
@@ -299,7 +298,7 @@ func (gs *GatherService) Close() {
 	gs.meshUpdateDone <- struct{}{}
 	<-gs.meshUpdateDone
 
-	//<-gs.beacon.Done()
+	gs.beacon.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(len(gs.conns))

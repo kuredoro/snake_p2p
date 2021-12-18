@@ -1,12 +1,12 @@
 package heartbeat
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
-	"golang.org/x/net/context"
 )
 
 var HeartbeatEvery = 1 * time.Second
@@ -25,9 +25,7 @@ type PeerStatus struct {
 }
 
 type HeartbeatService struct {
-	ctx    context.Context
-	cancel func()
-	done   chan struct{}
+	done chan struct{}
 
 	ping *ping.PingService
 	peer peer.ID
@@ -37,17 +35,13 @@ type HeartbeatService struct {
 	reportCh chan PeerStatus
 }
 
-func NewHeartbeat(ctx context.Context, ping *ping.PingService, p peer.ID, outCh chan PeerStatus) (*HeartbeatService, error) {
+func NewHeartbeat(ping *ping.PingService, p peer.ID, outCh chan PeerStatus) (*HeartbeatService, error) {
 	if ping == nil {
 		return nil, errors.New("ping service is nil")
 	}
 
-	localCtx, cancel := context.WithCancel(ctx)
-
 	hb := &HeartbeatService{
-		ctx:    localCtx,
-		cancel: cancel,
-		done:   make(chan struct{}),
+		done: make(chan struct{}),
 
 		ping: ping,
 		peer: p,
@@ -63,12 +57,15 @@ func NewHeartbeat(ctx context.Context, ping *ping.PingService, p peer.ID, outCh 
 }
 
 func (h *HeartbeatService) run() {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	for {
 		select {
 		case <-h.done:
+			cancel()
 			close(h.done)
 			return
-		case res := <-h.ping.Ping(h.ctx, h.peer):
+		case res := <-h.ping.Ping(ctx, h.peer):
 			if res.Error != nil {
 				if h.peerStatus != dead {
 					h.reportCh <- PeerStatus{
