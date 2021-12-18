@@ -109,8 +109,6 @@ func (m peerMesh) String() string {
 }
 
 type GatherService struct {
-	ctx                         context.Context
-	cancel                      func()
 	monitorDone, meshUpdateDone chan struct{}
 
 	h       host.Host
@@ -129,11 +127,7 @@ type GatherService struct {
 }
 
 func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
-	localCtx, cancel := context.WithCancel(ctx)
-
 	gs := &GatherService{
-		ctx:            localCtx,
-		cancel:         cancel,
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
 
@@ -149,7 +143,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
 		localConnUpdates: make(chan heartbeat.PeerStatus),
 
-		beacon: NewGatherPointBeacon(localCtx, topic, *HostAddrInfo(h), TTL),
+		beacon: NewGatherPointBeacon(context.TODO(), topic, *HostAddrInfo(h), TTL),
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
@@ -163,7 +157,7 @@ func NewGatherService(ctx context.Context, h host.Host, topic *pubsub.Topic, pin
 func (gs *GatherService) GatherHandler(stream network.Stream) {
 	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
 
-	hb, err := heartbeat.NewHeartbeat(gs.ctx, gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
+	hb, err := heartbeat.NewHeartbeat(context.TODO(), gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
 	if err != nil {
 		panic(err)
 	}
@@ -179,7 +173,7 @@ func (gs *GatherService) meshUpdateLoop() {
 
 	for {
 		select {
-		case <-gs.ctx.Done():
+		case <-gs.meshUpdateDone:
 			close(gs.meshUpdateDone)
 			return
 		case mod := <-gs.meshCh:
@@ -204,7 +198,7 @@ func (gs *GatherService) meshUpdateLoop() {
 func (gs *GatherService) monitorLoop() {
 	for {
 		select {
-		case <-gs.ctx.Done():
+		case <-gs.monitorDone:
 			close(gs.monitorDone)
 			return
 		case peerStatus := <-gs.localConnUpdates:
@@ -299,6 +293,14 @@ func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrI
 }
 
 func (gs *GatherService) Close() {
+	gs.monitorDone <- struct{}{}
+	<-gs.monitorDone
+
+	gs.meshUpdateDone <- struct{}{}
+	<-gs.meshUpdateDone
+
+	//<-gs.beacon.Done()
+
 	var wg sync.WaitGroup
 	wg.Add(len(gs.conns))
 
@@ -310,11 +312,6 @@ func (gs *GatherService) Close() {
 	}
 
 	wg.Wait()
-
-	gs.cancel()
-	<-gs.monitorDone
-	<-gs.meshUpdateDone
-	<-gs.beacon.Done()
 
 	close(gs.localConnUpdates)
 
