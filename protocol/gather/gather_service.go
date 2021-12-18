@@ -4,9 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,86 +23,6 @@ func HostAddrInfo(h host.Host) *peer.AddrInfo {
 		ID:    h.ID(),
 		Addrs: h.Addrs(),
 	}
-}
-
-type peerMesh map[peer.ID]map[peer.ID]struct{}
-
-type peerMeshMod func(peerMesh) bool
-
-func addEdge(from, to peer.ID) peerMeshMod {
-	return func(mesh peerMesh) bool {
-		if _, exists := mesh[from]; !exists {
-			mesh[from] = make(map[peer.ID]struct{})
-		}
-
-		mesh[from][to] = struct{}{}
-		return true
-	}
-}
-
-func removeEdge(from, to peer.ID) peerMeshMod {
-	return func(mesh peerMesh) bool {
-		delete(mesh[from], to)
-		return false
-	}
-}
-
-func addDoubleEdge(from, to peer.ID) peerMeshMod {
-	return func(mesh peerMesh) bool {
-		addEdge(from, to)(mesh)
-		addEdge(to, from)(mesh)
-		return true
-	}
-}
-
-func removeDoubleEdge(from, to peer.ID) peerMeshMod {
-	return func(mesh peerMesh) bool {
-		removeEdge(from, to)(mesh)
-		removeEdge(to, from)(mesh)
-		return false
-	}
-}
-
-func (m peerMesh) String() string {
-	var str strings.Builder
-
-	index2peer := make([]peer.ID, 0, len(m))
-	for id := range m {
-		index2peer = append(index2peer, id)
-	}
-
-	sort.Slice(index2peer, func(i, j int) bool {
-		return index2peer[i].String() < index2peer[j].String()
-	})
-
-	peer2index := make(map[peer.ID]int)
-	for i, id := range index2peer {
-		peer2index[id] = i
-	}
-
-	neightbours := make([]int, 0, len(m))
-	for i, srcID := range index2peer {
-		idStr := srcID.String()
-		str.WriteString(strconv.Itoa(i))
-		str.WriteRune(' ')
-		str.WriteString(idStr[len(idStr)-6:])
-		str.WriteString(": ")
-
-		neightbours = neightbours[:0]
-		for destID := range m[srcID] {
-			neightbours = append(neightbours, peer2index[destID])
-		}
-
-		sort.Ints(neightbours)
-
-		for _, index := range neightbours {
-			str.WriteString(strconv.Itoa(index))
-			str.WriteRune(' ')
-		}
-		str.WriteRune('\n')
-	}
-
-	return str.String()
 }
 
 type GatherService struct {
@@ -223,7 +140,7 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 }
 
 func (gs *GatherService) meshUpdateLoop() {
-	scanResults := make(chan struct{})
+	scanResults := make(chan []peer.ID)
 	defer close(scanResults)
 
 	for {
@@ -240,12 +157,13 @@ func (gs *GatherService) meshUpdateLoop() {
 				continue
 			}
 
-			go func() {
-				time.Sleep(time.Second)
-				scanResults <- struct{}{}
-			}()
-		case <-scanResults:
-			fmt.Printf("RESCANNED\n")
+			clique := gs.mesh.FindClique(4, gs.h.ID())
+			if clique == nil {
+				fmt.Printf("NO CLIQUES FOUND\n")
+				continue
+			}
+
+			fmt.Printf("CLIQUE FOUND %v\n", clique)
 		}
 	}
 }
