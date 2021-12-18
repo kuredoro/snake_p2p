@@ -4,15 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/i582/cfmt/cmd/cfmt"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+	"github.com/rs/zerolog/log"
 
 	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
@@ -45,20 +44,17 @@ type Node struct {
 
 func New(ctx context.Context) (*Node, error) {
 	// Set up host
-	fmt.Print("Setting up host...")
-	os.Stdout.Sync()
-
 	h, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
 	if err != nil {
 		return nil, fmt.Errorf("init libp2p host: %v", err)
 	}
-	fmt.Println("ok")
+	log.Info().Msg("Initialized libp2p host")
 
 	// Set up mDNS discovery
 	if err := setupDiscovery(h); err != nil {
 		return nil, fmt.Errorf("setup discovery: %v", err)
 	}
-	fmt.Println("Now listening")
+	log.Info().Msg("Discovery set up")
 
 	// Set up pub/sub
 	ps, err := pubsub.NewGossipSub(ctx, h)
@@ -66,7 +62,6 @@ func New(ctx context.Context) (*Node, error) {
 		return nil, fmt.Errorf("enable pubsub: %v", err)
 	}
 
-	fmt.Print("Joining the network...")
 	topic, err := ps.Join("snake_test")
 	if err != nil {
 		return nil, fmt.Errorf("join topic: %v", topic)
@@ -76,7 +71,8 @@ func New(ctx context.Context) (*Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("subscribe to %v: %v", topic, err)
 	}
-	fmt.Println("ok")
+
+	log.Info().Msg("Joined the pub/sub network")
 
 	n := &Node{
 		h:                  h,
@@ -96,18 +92,24 @@ func New(ctx context.Context) (*Node, error) {
 }
 
 func (n *Node) Close() {
-	fmt.Println("start 1")
 	if n.gatherService != nil {
+		log.Debug().Msg("Closing gathering service")
 		n.gatherService.Close()
 	}
-	fmt.Println("end 2")
 	for i, js := range n.joinedGatherPoints {
-		fmt.Println("start", i)
+		log.Debug().
+			Str("facilitator", i.Pretty()).
+			Msg("Closing join service")
 		js.Close()
-		fmt.Println("end", i)
 	}
 
-	n.h.Close()
+	log.Debug().Msg("Closing libp2p host")
+	err := n.h.Close()
+	if err != nil {
+		log.Err(err).Msg("Close libp2p host")
+	}
+
+	log.Info().Msg("Snake node closed")
 }
 
 func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
@@ -127,7 +129,9 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 
 	n.joinedGatherPoints[pi.ID] = service
 
-	fmt.Printf("JOINED %v\n", pi.ID)
+	log.Info().
+		Str("facilitator", pi.ID.Pretty()).
+		Msg("New join service")
 
 	return nil
 }
@@ -137,6 +141,8 @@ func (n *Node) CreateGatherPoint(TTL time.Duration) (err error) {
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
+
+	log.Info().Msg("Created gather point")
 
 	return nil
 }
@@ -164,7 +170,7 @@ func (n *Node) readLoop() {
 		select {
 		// TODO: done channel to close this goroutine
 		case err := <-errCh:
-			printErr("receive next message:", err)
+			log.Err(err).Msg("Receive pub/sub message")
 			close(n.GatherPoints)
 			return
 		case psMsg := <-subCh:
@@ -176,7 +182,10 @@ func (n *Node) readLoop() {
 
 			msg := &gather.GatherPointMessage{}
 			if err := json.Unmarshal(psMsg.Data, &msg); err != nil {
-				cfmt.Printf("{{warning:}}::lightYellow|bold couldn't unarshal %q\n", string(psMsg.Data))
+				log.Err(err).
+					Str("from", psMsg.GetFrom().Pretty()).
+					Str("text", fmt.Sprintf("%q", psMsg.String())).
+					Msg("Unmarshal topic message")
 				continue
 			}
 
@@ -195,19 +204,4 @@ func (n *Node) readLoop() {
 			n.EstablishedGames <- info
 		}
 	}
-}
-
-func printErr(m string, args ...interface{}) {
-	if len(args) == 0 {
-		panic("printErr: no arguments passed")
-	}
-
-	err := args[len(args)-1]
-
-	header := m
-	if len(args) > 1 {
-		header = fmt.Sprintf(m, args[:len(args)-1])
-	}
-
-	cfmt.Printf("{{error:}}::lightRed|bold %s %v\n", header, err)
 }
