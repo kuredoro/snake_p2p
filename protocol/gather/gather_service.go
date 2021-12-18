@@ -18,6 +18,19 @@ import (
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 )
 
+type PeerError struct {
+	Peer peer.ID
+	Err  error
+}
+
+func (e *PeerError) Error() string {
+	return fmt.Sprintf("peer %s: %v", e.Peer.Pretty(), e.Err)
+}
+
+func (e *PeerError) Unwrap() error {
+	return e.Err
+}
+
 func HostAddrInfo(h host.Host) *peer.AddrInfo {
 	return &peer.AddrInfo{
 		ID:    h.ID(),
@@ -183,25 +196,39 @@ func (gs *GatherService) monitorLoop() {
 
 				err := gs.askEverybodyToConnectTo(peerStatus.Peer)
 				if err != nil {
-					fmt.Printf("EVTC %v\n", err)
+					merr := err.(*multierror.Error)
+					for _, peerErr := range merr.Errors {
+						gs.peerDisconnected(peerErr.(*PeerError).Peer)
+						fmt.Printf("ASK ERR %v\n", peerErr)
+					}
 				}
 			case false:
 				gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.Peer)
 
+				gs.peerDisconnected(peerStatus.Peer)
 				/*
-					                The main stream may still be alive
+				   The main stream may still be alive
 
-									gs.streams[peerStatus.ID].Close()
-									delete(gs.streams, peerStatus.ID)
-
-									gs.conns[peerStatus.ID].Close()
-									delete(gs.conns, peerStatus.ID)
 				*/
 
 				fmt.Printf("PEER DEAD %v\n", peerStatus.Peer)
 			}
 		}
 	}
+}
+
+func (gs *GatherService) peerDisconnected(p peer.ID) {
+	if _, connected := gs.streams[p]; !connected {
+		return
+	}
+
+	gs.streams[p].Close()
+	delete(gs.streams, p)
+
+	gs.conns[p].Close()
+	delete(gs.conns, p)
+
+	gs.meshCh <- removePeer(p)
 }
 
 func (gs *GatherService) askEverybodyToConnectTo(peer peer.ID) (merr error) {
@@ -252,14 +279,20 @@ func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrI
 
 	raw, err := json.Marshal(&msg)
 	if err != nil {
-		return fmt.Errorf("marshal: %v", err)
+		return &PeerError{
+			Peer: pi.ID,
+			Err:  fmt.Errorf("marshal: %v", err),
+		}
 	}
 
 	raw = append(raw, '\n')
 
 	_, err = stream.Write(raw)
 	if err != nil {
-		return fmt.Errorf("send: %v", err)
+		return &PeerError{
+			Peer: pi.ID,
+			Err:  fmt.Errorf("send: %v", err),
+		}
 	}
 
 	return nil
