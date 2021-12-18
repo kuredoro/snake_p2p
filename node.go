@@ -14,6 +14,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
+	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 )
 
@@ -27,11 +28,6 @@ func HostAddrInfo(h host.Host) *peer.AddrInfo {
 	}
 }
 
-type GameEstablished struct {
-	Facilitator peer.ID
-	// TODO: SnakeService
-}
-
 type Node struct {
 	h        host.Host
 	ps       *pubsub.PubSub
@@ -43,8 +39,8 @@ type Node struct {
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
 	GatherPoints       chan *gather.GatherPointMessage
-	EstablishedGames   chan GameEstablished
-	gameProxyCh        chan GameEstablished
+	EstablishedGames   chan core.GameEstablished
+	gameProxyCh        chan core.GameEstablished
 }
 
 func New(ctx context.Context) (*Node, error) {
@@ -91,8 +87,8 @@ func New(ctx context.Context) (*Node, error) {
 		ping:               ping.NewPingService(h),
 		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
 		GatherPoints:       make(chan *gather.GatherPointMessage, 32),
-		EstablishedGames:   make(chan GameEstablished),
-		gameProxyCh:        make(chan GameEstablished),
+		EstablishedGames:   make(chan core.GameEstablished),
+		gameProxyCh:        make(chan core.GameEstablished),
 	}
 
 	go n.readLoop()
@@ -124,7 +120,7 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 		return fmt.Errorf("join gather point: %v", err)
 	}
 
-	service, err := gather.NewJoinService(ctx, n.h, n.ping, pi.ID)
+	service, err := gather.NewJoinService(ctx, n.h, n.ping, pi.ID, n.gameProxyCh)
 	if err != nil {
 		return fmt.Errorf("create join service for peer %v: %v", pi.ID.ShortString(), err)
 	}
@@ -137,7 +133,7 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 }
 
 func (n *Node) CreateGatherPoint(TTL time.Duration) (err error) {
-	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.ping, SendEvery)
+	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.ping, SendEvery, n.gameProxyCh)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
