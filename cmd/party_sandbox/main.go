@@ -76,7 +76,7 @@ func main() {
 	}
 
 	fmt.Print("Joining the network...")
-	m, err := JoinNetwork(ctx, h, ps)
+	m, err := JoinNetwork(h, ps)
 	if err != nil {
 		printErr("join the network:", err)
 		os.Exit(1)
@@ -95,7 +95,10 @@ func main() {
 		select {
 		case msg := <-m.Messages:
 			fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
-			m.JoinGatherPoint(msg.ConnectTo)
+			err := m.JoinGatherPoint(ctx, msg.ConnectTo)
+			if err != nil {
+				fmt.Printf("ERR join gather point: %v\n", err)
+			}
 		case <-sigCh:
 			m.Close()
 			return
@@ -104,7 +107,6 @@ func main() {
 }
 
 type NetworkMember struct {
-	ctx      context.Context
 	h        host.Host
 	ps       *pubsub.PubSub
 	topic    *pubsub.Topic
@@ -128,7 +130,7 @@ func (nm *NetworkMember) Close() {
 	}
 }
 
-func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkMember, error) {
+func JoinNetwork(h host.Host, ps *pubsub.PubSub) (*NetworkMember, error) {
 	topic, err := ps.Join("snake_test")
 	if err != nil {
 		return nil, fmt.Errorf("join topic %q: %v", "snake_test", topic)
@@ -140,7 +142,6 @@ func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkM
 	}
 
 	nm := &NetworkMember{
-		ctx:                ctx,
 		h:                  h,
 		ps:                 ps,
 		topic:              topic,
@@ -155,17 +156,17 @@ func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkM
 	return nm, nil
 }
 
-func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
+func (nm *NetworkMember) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 	if _, joined := nm.joinedGatherPoints[pi.ID]; joined {
 		return nil
 	}
 
-	err := nm.h.Connect(nm.ctx, pi)
+	err := nm.h.Connect(ctx, pi)
 	if err != nil {
 		return fmt.Errorf("join gather point: %v", err)
 	}
 
-	service, err := gather.NewJoinService(nm.ctx, nm.h, pi.ID)
+	service, err := gather.NewJoinService(ctx, nm.h, pi.ID)
 	if err != nil {
 		return fmt.Errorf("create join service for peer %v: %v", pi.ID.ShortString(), err)
 	}
@@ -178,7 +179,7 @@ func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
 }
 
 func (nm *NetworkMember) CreateGatherPoint(TTL time.Duration) (err error) {
-	nm.gatherService, err = gather.NewGatherService(context.TODO(), nm.h, nm.topic, nm.ping, SendEvery)
+	nm.gatherService, err = gather.NewGatherService(nm.h, nm.topic, nm.ping, SendEvery)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
@@ -188,7 +189,7 @@ func (nm *NetworkMember) CreateGatherPoint(TTL time.Duration) (err error) {
 
 func (nm *NetworkMember) readLoop() {
 	for {
-		psMsg, err := nm.sub.Next(nm.ctx)
+		psMsg, err := nm.sub.Next(context.TODO())
 		if err != nil {
 			printErr("receive next message:", err)
 			close(nm.Messages)
