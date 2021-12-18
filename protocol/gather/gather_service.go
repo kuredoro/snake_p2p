@@ -40,6 +40,7 @@ func HostAddrInfo(h host.Host) *peer.AddrInfo {
 
 type GatherService struct {
 	monitorDone, meshUpdateDone chan struct{}
+	done                        bool
 
 	h       host.Host
 	streams map[peer.ID]network.Stream
@@ -85,6 +86,11 @@ func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, 
 }
 
 func (gs *GatherService) GatherHandler(stream network.Stream) {
+	if gs.done {
+		stream.Close()
+		return
+	}
+
 	fmt.Printf("PEER JOINED %v\n", stream.Conn().RemotePeer())
 
 	hb, err := heartbeat.NewHeartbeat(gs.ping, stream.Conn().RemotePeer(), gs.localConnUpdates)
@@ -177,6 +183,46 @@ func (gs *GatherService) meshUpdateLoop() {
 			}
 
 			fmt.Printf("CLIQUE FOUND %v\n", clique)
+
+			gs.done = true
+
+			addrs := make([]peer.AddrInfo, len(clique))
+			for i, id := range clique {
+				addrs[i].ID = id
+			}
+
+			msg := GatherMessage{
+				Type:  GatheringFinished,
+				Addrs: addrs,
+			}
+
+			raw, err := json.Marshal(&msg)
+			if err != nil {
+				panic(err)
+			}
+
+			raw = append(raw, '\n')
+
+			var wg sync.WaitGroup
+			wg.Add(len(gs.streams))
+			for id, stream := range gs.streams {
+				go func(id string, s network.Stream) {
+					_, err := s.Write(raw)
+					if err != nil {
+						fmt.Printf("NOTIF ERR %s: %v\n", id, err)
+					}
+					wg.Done()
+				}(id.Pretty(), stream)
+			}
+
+			wg.Wait()
+
+			gs.closeHeartbeats()
+
+			for id := range gs.streams {
+				// JoinService will close the stream itself
+				delete(gs.streams, id)
+			}
 		}
 	}
 }
@@ -256,7 +302,7 @@ func (gs *GatherService) askEverybodyToConnectTo(peer peer.ID) (merr error) {
 
 	// Sanity check
 	if msgCount != len(gs.mesh)-2 {
-		fmt.Printf("WAT going to notify %d peers, but expected %d\n", msgCount, len(gs.streams)-1)
+		fmt.Printf("WAT going to notify %d peers, but expected %d\n", msgCount, len(gs.streams)-2)
 	}
 
 	for i := 0; i < msgCount; i++ {
@@ -298,15 +344,7 @@ func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrI
 	return nil
 }
 
-func (gs *GatherService) Close() {
-	gs.monitorDone <- struct{}{}
-	<-gs.monitorDone
-
-	gs.meshUpdateDone <- struct{}{}
-	<-gs.meshUpdateDone
-
-	gs.beacon.Close()
-
+func (gs *GatherService) closeHeartbeats() {
 	var wg sync.WaitGroup
 	wg.Add(len(gs.conns))
 
@@ -318,6 +356,22 @@ func (gs *GatherService) Close() {
 	}
 
 	wg.Wait()
+
+	for id := range gs.conns {
+		delete(gs.conns, id)
+	}
+}
+
+func (gs *GatherService) Close() {
+	gs.monitorDone <- struct{}{}
+	<-gs.monitorDone
+
+	gs.meshUpdateDone <- struct{}{}
+	<-gs.meshUpdateDone
+
+	gs.beacon.Close()
+
+	gs.closeHeartbeats()
 
 	close(gs.localConnUpdates)
 
