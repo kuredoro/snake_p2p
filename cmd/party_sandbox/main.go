@@ -50,7 +50,7 @@ func main() {
 			// fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
 			err := h.JoinGatherPoint(context.TODO(), msg.ConnectTo)
 			if err != nil {
-                log.Err(err).Msg("Join gather point")
+				log.Err(err).Msg("Join gather point")
 			}
 		case <-sigCh:
 			h.Close()
