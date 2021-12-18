@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -164,6 +165,61 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 	peer := stream.Conn().RemotePeer()
 	gs.streams[peer] = stream
 	gs.conns[peer] = hb
+
+	// Proto start
+	scanner := bufio.NewScanner(stream)
+	readCh := make(chan bool)
+	defer close(readCh)
+
+	scan := func() {
+		readCh <- scanner.Scan()
+	}
+
+	go scan()
+
+	remotePeer := stream.Conn().RemotePeer()
+
+	// TODO: writing to streams should probably be done from this function
+	// for synchronization purposes, but maybe stream.Write is thread-safe...
+	for {
+		select {
+		case ok := <-readCh:
+			if !ok {
+				fmt.Printf("Not ok\n")
+				return
+			}
+			fmt.Printf("READ\n")
+
+			var msg GatherMessage
+			err := json.Unmarshal(scanner.Bytes(), &msg)
+			if err != nil {
+				fmt.Printf("ERR FROM %s: %v\n", remotePeer, err)
+				go scan()
+				continue
+			}
+
+			switch msg.Type {
+			case Connected:
+				if len(msg.Addrs) == 0 {
+					fmt.Printf("WAT empty msg addrs from %s for CONN\n", remotePeer)
+					break
+				}
+				fmt.Printf("CONN %s <-> %s\n", remotePeer, msg.Addrs[0].ID)
+				gs.meshCh <- addDoubleEdge(remotePeer, msg.Addrs[0].ID)
+			case Disconnected:
+				if len(msg.Addrs) == 0 {
+					fmt.Printf("WAT empty msg addrs from %s for DISC\n", remotePeer)
+					break
+				}
+				fmt.Printf("DISC %s <-> %s\n", remotePeer, msg.Addrs[0].ID)
+				gs.meshCh <- removeDoubleEdge(remotePeer, msg.Addrs[0].ID)
+			default:
+				fmt.Printf("WAT\n")
+			}
+
+			go scan()
+		}
+	}
 }
 
 func (gs *GatherService) meshUpdateLoop() {
