@@ -64,48 +64,47 @@ func NewHeartbeat(ctx context.Context, ping *ping.PingService, p peer.ID, outCh 
 
 func (h *HeartbeatService) run() {
 	for {
-		res := <-h.ping.Ping(h.ctx, h.peer)
-
-		if h.ctx.Err() != nil {
+		select {
+		case <-h.done:
 			close(h.done)
 			return
-		}
+		case res := <-h.ping.Ping(h.ctx, h.peer):
+			if res.Error != nil {
+				if h.peerStatus != dead {
+					h.reportCh <- PeerStatus{
+						Peer:  h.peer,
+						Alive: false,
+					}
 
-		if res.Error != nil {
-			if h.peerStatus != dead {
-				h.reportCh <- PeerStatus{
-					Peer:  h.peer,
-					Alive: false,
+					h.peerStatus = dead
 				}
 
-				h.peerStatus = dead
+				time.Sleep(HeartbeatEvery)
+				continue
 			}
 
+			if h.peerStatus != alive {
+				h.reportCh <- PeerStatus{
+					Peer:  h.peer,
+					Alive: true,
+				}
+
+				h.peerStatus = alive
+			}
+
+			// Note: sleeping here for HeartbeatEvery seconds makes heartbeats
+			// fire a bit less frequently than desired. That's because we do
+			// not take away the amount of time Ping has taken from the
+			// HeartbeatEvery, so the heartbeat is fired every HeartbeatEvery +
+			// 'how much Ping has taken'. Since Ping has a timeout, the heartbeat
+			// will be fired eventually, but making it fire every HeartbeatEvery
+			// exactly will clutter this function, which doesn't seem worth it.
 			time.Sleep(HeartbeatEvery)
-			continue
 		}
-
-		if h.peerStatus != alive {
-			h.reportCh <- PeerStatus{
-				Peer:  h.peer,
-				Alive: true,
-			}
-
-			h.peerStatus = alive
-		}
-
-		// Note: sleeping here for HeartbeatEvery seconds makes heartbeats
-		// fire a bit less frequently than desired. That's because we do
-		// not take away the amount of time Ping has taken from the
-		// HeartbeatEvery, so the heartbeat is fired every HeartbeatEvery +
-		// 'how much Ping has taken'. Since Ping has a timeout, the heartbeat
-		// will be fired eventually, but making it fire every HeartbeatEvery
-		// exactly will clutter this function, which doesn't seem worth it.
-		time.Sleep(HeartbeatEvery)
 	}
 }
 
 func (h *HeartbeatService) Close() {
-	h.cancel()
+	h.done <- struct{}{}
 	<-h.done
 }
