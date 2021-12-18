@@ -74,6 +74,8 @@ func (js *JoinService) run() {
 				fmt.Printf("ERR join service: close: %v\n", err)
 			}
 
+			js.closeHeartbeats()
+
 			if reading {
 				<-readCh // When stream has closed, .Scan() should quit
 			}
@@ -137,6 +139,31 @@ func (js *JoinService) run() {
 						errCh <- fmt.Errorf("connect to %v: %v", msg.Addrs[0].ID, err)
 					}
 				}()
+			case GatheringFinished:
+				err := js.stream.Close()
+				if err != nil {
+					fmt.Printf("FIN error: close: %v\n", err)
+				}
+
+				foundMyself := false
+				for _, pi := range msg.Addrs {
+					if pi.ID == js.h.ID() {
+						foundMyself = true
+						break
+					}
+				}
+
+				js.closeHeartbeats()
+
+				// God, this (reading flag) is so... error prone...
+				reading = false
+
+				if !foundMyself {
+					continue
+				}
+
+				fmt.Printf("YAAAY\n")
+				continue
 			default:
 				fmt.Printf("BAD TYPE %#v", msg)
 			}
@@ -145,6 +172,13 @@ func (js *JoinService) run() {
 		case err := <-errCh:
 			fmt.Printf("ERR JOIN %v\n", err)
 		}
+	}
+}
+
+func (js *JoinService) closeHeartbeats() {
+	for id, hb := range js.conns {
+		hb.Close()
+		delete(js.conns, id)
 	}
 }
 
