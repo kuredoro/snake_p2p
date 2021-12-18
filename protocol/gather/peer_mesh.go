@@ -1,13 +1,13 @@
 package gather
 
 import (
-	"fmt"
 	"math/bits"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/rs/zerolog/log"
 )
 
 type peerMesh map[peer.ID]map[peer.ID]struct{}
@@ -114,7 +114,7 @@ func (m peerMesh) FindClique(n int, required peer.ID) []peer.ID {
 		neighbours = append(neighbours, id)
 	}
 
-	fmt.Printf("neigh %v\n", neighbours)
+	log.Trace().Msgf("Neighbours %v", neighbours)
 
 	// This is unbelievably stupid, but yeah it's O(2^V)
 	// TODO: replace with more efficient version.
@@ -138,7 +138,8 @@ func (m peerMesh) FindClique(n int, required peer.ID) []peer.ID {
 			str := id.Pretty()
 			nice[i] = str[len(str)-6:]
 		}
-		fmt.Printf("clique %v\n", nice)
+
+		log.Trace().Msgf("Clique candidate %v", nice)
 
 		if m.IsClique(clique) {
 			return clique
