@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -21,9 +22,11 @@ type JoinService struct {
 	stream       network.Stream
 	conns        map[peer.ID]*heartbeat.HeartbeatService
 	connHealthCh chan heartbeat.PeerStatus
+
+	gameCh chan<- core.GameEstablished
 }
 
-func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pID peer.ID) (*JoinService, error) {
+func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pID peer.ID, gameCh chan<- core.GameEstablished) (*JoinService, error) {
 	stream, err := h.NewStream(ctx, pID, ID)
 	if err != nil {
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
@@ -37,6 +40,8 @@ func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pI
 		stream:       stream,
 		conns:        make(map[peer.ID]*heartbeat.HeartbeatService),
 		connHealthCh: make(chan heartbeat.PeerStatus),
+
+		gameCh: gameCh,
 	}
 
 	// Makes sure the facilitator's callback is called.
@@ -163,6 +168,9 @@ func (js *JoinService) run() {
 				}
 
 				fmt.Printf("YAAAY\n")
+				js.gameCh <- core.GameEstablished{
+					Facilitator: js.stream.Conn().RemotePeer(),
+				}
 				continue
 			default:
 				fmt.Printf("BAD TYPE %#v", msg)

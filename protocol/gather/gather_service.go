@@ -15,6 +15,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 
+	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 )
 
@@ -54,10 +55,13 @@ type GatherService struct {
 	conns            map[peer.ID]*heartbeat.HeartbeatService
 	localConnUpdates chan heartbeat.PeerStatus
 
+	// TODO: move beacon to snake.Node
 	beacon *GatherPointBeacon
+
+	gameCh chan<- core.GameEstablished
 }
 
-func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration) (*GatherService, error) {
+func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
 	gs := &GatherService{
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
@@ -75,6 +79,8 @@ func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, 
 		localConnUpdates: make(chan heartbeat.PeerStatus),
 
 		beacon: NewGatherPointBeacon(topic, *HostAddrInfo(h), TTL),
+
+		gameCh: gameCh,
 	}
 
 	h.SetStreamHandler(ID, gs.GatherHandler)
@@ -221,7 +227,13 @@ func (gs *GatherService) meshUpdateLoop() {
 
 			for id := range gs.streams {
 				// JoinService will close the stream itself
+				// TODO: delete loop or create new? Does it even matter,
+				// this service should be garbage collected...
 				delete(gs.streams, id)
+			}
+
+			gs.gameCh <- core.GameEstablished{
+				Facilitator: gs.h.ID(),
 			}
 		}
 	}
