@@ -78,12 +78,18 @@ func (h *HeartbeatService) run() {
 		case res := <-resCh:
 			if res.Error != nil {
 				if h.peerStatus != dead {
+					h.peerStatus = dead
+
+					// XXX What the hell is this???
+					// The problem is that when join service calls Close
+					// the select chooses the done channel and quits the loop,
+					// and then it waits us to send the status on channel that
+					// it does not listen anymore...
+					// Wait... why not close heartbeats before the done ch?
 					h.reportCh <- PeerStatus{
 						Peer:  h.peer,
 						Alive: false,
 					}
-
-					h.peerStatus = dead
 				}
 
 				resCh = fakeCh
@@ -91,12 +97,12 @@ func (h *HeartbeatService) run() {
 			}
 
 			if h.peerStatus != alive {
+				h.peerStatus = alive
+
 				h.reportCh <- PeerStatus{
 					Peer:  h.peer,
 					Alive: true,
 				}
-
-				h.peerStatus = alive
 			}
 
 			resCh = fakeCh
@@ -105,6 +111,7 @@ func (h *HeartbeatService) run() {
 			ctx, cancel = context.WithCancel(context.Background())
 
 			resCh = h.ping.Ping(ctx, h.peer)
+			timer.Reset(HeartbeatEvery)
 		}
 	}
 }
