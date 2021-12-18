@@ -14,13 +14,18 @@ type discoveryNotifee struct {
 }
 
 func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
-	fmt.Printf("NEW peer: %v\n", pi)
+	if pi.ID == n.h.ID() {
+		return
+	}
+
+	fmt.Printf("DISCOVERED %s\n", pi.ID)
 	err := n.h.Connect(context.Background(), pi)
 	if err != nil {
 		fmt.Printf("ERR connecting to peer %v: %v\n", pi.ID.Pretty(), err)
 	}
 
-	fmt.Printf("PEER ADDR INFO: %v\n", n.h.Peerstore().PeerInfo(pi.ID))
+	info := n.h.Peerstore().PeerInfo(pi.ID)
+	fmt.Printf("PEER ADDR INFO %s %v\n", info.ID, info.Addrs)
 }
 
 func setupDiscovery(h host.Host) error {
