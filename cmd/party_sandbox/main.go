@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/i582/cfmt/cmd/cfmt"
@@ -20,6 +22,7 @@ import (
 
 const SendEvery = time.Second
 
+// TODO: move to utility package
 func HostAddrInfo(h host.Host) *peer.AddrInfo {
 	return &peer.AddrInfo{
 		ID:    h.ID(),
@@ -84,11 +87,19 @@ func main() {
 		m.CreateGatherPoint(SendEvery)
 	}
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	// Read from the channel and send
 	for {
-		msg := <-m.Messages
-		fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
-		m.JoinGatherPoint(msg.ConnectTo)
+		select {
+		case msg := <-m.Messages:
+			fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
+			m.JoinGatherPoint(msg.ConnectTo)
+		case <-sigCh:
+			m.Close()
+			return
+		}
 	}
 }
 
@@ -104,6 +115,17 @@ type NetworkMember struct {
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
 	Messages           chan *gather.GatherPointMessage
+}
+
+func (nm *NetworkMember) Close() {
+	fmt.Println("start 1")
+	nm.gatherService.Close()
+	fmt.Println("end 2")
+	for i, js := range nm.joinedGatherPoints {
+		fmt.Println("start", i)
+		js.Close()
+		fmt.Println("end", i)
+	}
 }
 
 func JoinNetwork(ctx context.Context, h host.Host, ps *pubsub.PubSub) (*NetworkMember, error) {
@@ -156,7 +178,7 @@ func (nm *NetworkMember) JoinGatherPoint(pi peer.AddrInfo) error {
 }
 
 func (nm *NetworkMember) CreateGatherPoint(TTL time.Duration) (err error) {
-	nm.gatherService, err = gather.NewGatherService(nm.ctx, nm.h, nm.topic, nm.ping, SendEvery)
+	nm.gatherService, err = gather.NewGatherService(context.TODO(), nm.h, nm.topic, nm.ping, SendEvery)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
