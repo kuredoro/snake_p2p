@@ -12,8 +12,7 @@ import (
 )
 
 type JoinService struct {
-	ctx    context.Context
-	cancel func()
+	done chan struct{}
 
 	stream network.Stream
 }
@@ -24,38 +23,69 @@ func NewJoinService(ctx context.Context, h host.Host, pID peer.ID) (*JoinService
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
 	}
 
-	localCtx, cancel := context.WithCancel(ctx)
-
 	service := &JoinService{
-		ctx:    localCtx,
-		cancel: cancel,
+		done: make(chan struct{}),
 
 		stream: stream,
 	}
 
 	stream.Write(nil)
 
-	go service.Run()
+	go service.run()
 
 	return service, nil
 }
 
-func (js *JoinService) Run() {
+func (js *JoinService) run() {
 	scanner := bufio.NewScanner(js.stream)
+	readCh := make(chan bool)
+	defer close(readCh)
 
-	for scanner.Scan() {
-		var msg GatherMessage
-		err := json.Unmarshal(scanner.Bytes(), &msg)
-		if err != nil {
-			fmt.Printf("BAD MSG %q\n", scanner.Text())
-			continue
-		}
+	scan := func() {
+		readCh <- scanner.Scan()
+	}
 
-		switch msg.Type {
-		case ConnectionRequest:
-			fmt.Printf("CONN REQUEST to %v\n", msg.Addrs[0].ID)
-		default:
-			fmt.Printf("BAD TYPE %#v", msg)
+	scan()
+
+	for {
+		select {
+		case <-js.done:
+			err := js.stream.Close()
+			if err != nil {
+				fmt.Printf("ERR join service: close: %v\n", err)
+			}
+			close(js.done)
+			return
+		case ok := <-readCh:
+			if !ok {
+				err := js.stream.Close()
+				if err != nil {
+					fmt.Printf("ERR join service: close: %v\n", err)
+				}
+				close(js.done)
+				return
+			}
+
+			var msg GatherMessage
+			err := json.Unmarshal(scanner.Bytes(), &msg)
+			if err != nil {
+				fmt.Printf("BAD MSG %q\n", scanner.Text())
+				continue
+			}
+
+			switch msg.Type {
+			case ConnectionRequest:
+				fmt.Printf("CONN REQUEST to %v\n", msg.Addrs[0].ID)
+			default:
+				fmt.Printf("BAD TYPE %#v", msg)
+			}
+
+			scan()
 		}
 	}
+}
+
+func (js *JoinService) Close() {
+	js.done <- struct{}{}
+	<-js.done
 }
