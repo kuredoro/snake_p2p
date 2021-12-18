@@ -61,6 +61,11 @@ func (js *JoinService) run() {
 	errCh := make(chan error)
 	defer close(errCh)
 
+	// XXX: I'm so hungry...
+	// What is the proper way to handle this interdependency between
+	// reading and exiting. So much to learn....
+	reading := true
+
 	for {
 		select {
 		case <-js.done:
@@ -69,10 +74,13 @@ func (js *JoinService) run() {
 				fmt.Printf("ERR join service: close: %v\n", err)
 			}
 
-			<-readCh // When stream has closed, .Scan() should quit
+			if reading {
+				<-readCh // When stream has closed, .Scan() should quit
+			}
 			close(js.done)
 			return
 		case status := <-js.connHealthCh:
+			fmt.Printf("HEALTH %v\n", status)
 			switch status.Alive {
 			case true:
 				// TODO: research best practices for handling sending and
@@ -97,6 +105,7 @@ func (js *JoinService) run() {
 			}
 		case ok := <-readCh:
 			if !ok {
+				reading = false
 				err := js.stream.Close()
 				if err != nil {
 					fmt.Printf("ERR join service: close: %v\n", err)
@@ -110,6 +119,7 @@ func (js *JoinService) run() {
 			err := json.Unmarshal(scanner.Bytes(), &msg)
 			if err != nil {
 				fmt.Printf("BAD MSG %q\n", scanner.Text())
+				go scan()
 				continue
 			}
 
