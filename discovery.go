@@ -1,4 +1,4 @@
-package main
+package snake_p2p
 
 import (
 	"context"
@@ -29,6 +29,6 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 }
 
 func setupDiscovery(h host.Host) error {
-	s := mdns.NewMdnsService(h, "snake_test", &discoveryNotifee{h})
+	s := mdns.NewMdnsService(h, "snake_p2p", &discoveryNotifee{h})
 	return s.Start()
 }
