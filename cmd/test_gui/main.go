@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	gameUI := console.GatherUIInit()
+	gameUI := console.NewGatherUI()
 	// Shortcuts to navigate the slides.
 	//console.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 	//	if event.Key() == tcell.KeyCtrlN {

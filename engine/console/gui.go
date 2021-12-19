@@ -26,7 +26,7 @@ func checkNewGameField(textToCheck string, lastChar rune) bool {
 	return true
 }
 
-func GatherUIInit() *GatherUI {
+func NewGatherUI() *GatherUI {
 	g := &GatherUI{}
 	g.app = tview.NewApplication()
 	g.myGatherPoint = tview.NewTextView().
@@ -60,20 +60,15 @@ func GatherUIInit() *GatherUI {
 	g.newGame = tview.NewInputField().
 					SetLabel("Enter the maximum number of players ").
 					SetFieldWidth(0).
-					SetFieldBackgroundColor(tcell.ColorBlack)
+					SetFieldBackgroundColor(tcell.ColorBlack).
+					SetAcceptanceFunc(tview.InputFieldInteger)
 
 	g.newGame.SetDoneFunc(func(key tcell.Key) {
 		if key != tcell.KeyEnter {
 			// we don't want to do anything if they just tabbed away
 			return
 		}
-		line := g.newGame.GetText()
-		if _, err := strconv.Atoi(line); err != nil {
-			//print("It is not number", err)
-			// ignore not numbers
-			return
-		}
-		g.maxPlayers, _ = strconv.Atoi(line)
+		g.maxPlayers, _ = strconv.Atoi(g.newGame.GetText())
 		g.myGatherPoint.Clear()
 		fmt.Fprintf(g.myGatherPoint, "Max # of players: %d", g.maxPlayers)
 		g.flex.RemoveItem(g.newGame)
