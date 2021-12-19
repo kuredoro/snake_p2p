@@ -5,9 +5,9 @@ import (
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/net/context"
 	"os"
 	"strconv"
 	"time"
@@ -22,22 +22,38 @@ type GatherUI struct {
 	createBtn *tview.Button
 	newGame *tview.InputField
 	maxPlayers int
-	gatherPoints map[peer.ID]*gather.GatherPointMessage
+	gatherPoints map[string]*gather.GatherPointMessage
 }
 
-func checkNewGameField(textToCheck string, lastChar rune) bool {
-	_, err := strconv.Atoi(textToCheck)
-	if err != nil {
-		return false
+func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int, joined bool) {
+	ID := msg.ConnectTo.ID.Pretty()
+	tableCell := tview.NewTableCell(ID).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 0, tableCell)
+	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
+	tableCell = tview.NewTableCell(maxPlayers).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 1, tableCell)
+	r := ""
+	if joined {
+		r = string(tcell.RuneBullet)
 	}
-	return true
+	tableCell = tview.NewTableCell(r).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 2, tableCell)
 }
 
 func NewGatherUI(h *snake.Node) *GatherUI {
 	g := &GatherUI{}
 	g.h = h
 	g.app = tview.NewApplication()
-	g.gatherPoints = make(map[peer.ID]*gather.GatherPointMessage)
+	g.gatherPoints = make(map[string]*gather.GatherPointMessage)
 	g.myGatherPoint = tview.NewTextView().
 						SetRegions(true).
 						SetDynamicColors(true).
@@ -47,7 +63,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 	fmt.Fprintf(g.myGatherPoint, "No gather point created.")
 
 	table := tview.NewTable().
-		SetFixed(1, 1).
+		SetFixed(1, 0).
 		SetSelectable(true, false)
 	tableCell := tview.NewTableCell("ID").
 		SetTextColor(tcell.ColorYellow).
@@ -65,7 +81,21 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		SetExpansion(1)
 	table.SetCell(1, 2, tableCell)
 	g.gameList = table
-
+	g.gameList.SetSelectedFunc(func(row, column int) {
+		if row == 1 {
+			return
+		}
+		ID := g.gameList.GetCell(row, 0).Text
+		msg := g.gatherPoints[ID]
+		ctx := context.Background()
+		err := g.h.JoinGatherPoint(ctx, msg.ConnectTo)
+		if err != nil {
+			log.Err(err).Msg("Join gather point")
+		}
+		//cell := table.GetCell(row, 2)
+		//cell.Text = "✔️"
+		g.gameList.GetCell(row, 2).SetText("〇")
+	})
 	g.newGame = tview.NewInputField().
 					SetLabel("Enter the maximum number of players ").
 					SetFieldWidth(0).
@@ -102,26 +132,6 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 	return g
 }
 
-func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int) {
-	ID := msg.ConnectTo.ID.Pretty()
-	tableCell := tview.NewTableCell(ID).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 0, tableCell)
-	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
-	tableCell = tview.NewTableCell(maxPlayers).
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 1, tableCell)
-	tableCell = tview.NewTableCell("").
-		SetTextColor(tcell.ColorWhite).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 2, tableCell)
-}
-
 func (g *GatherUI) eventLoop() {
 	sigCh := make(chan os.Signal, 1)
 	for {
@@ -154,7 +164,7 @@ func (g *GatherUI) eventLoop() {
 
 			os.Exit(0)
 		case msg := <-g.h.GatherPoints:
-			if _, exists := g.gatherPoints[msg.ConnectTo.ID]; exists {
+			if _, exists := g.gatherPoints[msg.ConnectTo.ID.Pretty()]; exists {
 				continue
 			}
 
@@ -163,13 +173,9 @@ func (g *GatherUI) eventLoop() {
 				Uint("desired_player_count", msg.DesiredPlayerCount).
 				Msg("Found new gather point")
 
-			g.gatherPoints[msg.ConnectTo.ID] = msg
+			g.gatherPoints[msg.ConnectTo.ID.Pretty()] = msg
 			// Add cell to gather points table
-			addRow(g.gameList, msg, len(g.gatherPoints) + 1)
-			//err := g.h.JoinGatherPoint(ctx, msg.ConnectTo)
-			//if err != nil {
-			//	log.Err(err).Msg("Join gather point")
-			//}
+			addRow(g.gameList, msg, len(g.gatherPoints) + 1, false)
 		case <-sigCh:
 			g.h.Close()
 			return
