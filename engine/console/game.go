@@ -30,6 +30,7 @@ type GameUI struct {
 	bound 		Boundary
 	moveNum		int
 	AliveSnakes int
+	foodLastID int
 	Over        bool
 	Successful  bool
 	WinnerID    peer.ID
@@ -37,7 +38,7 @@ type GameUI struct {
 }
 
 // add food every N moves
-const N = 3
+const N = 5
 
 func NewGame(gi *game.GameInstance) *GameUI {
 	return &GameUI{
@@ -45,6 +46,7 @@ func NewGame(gi *game.GameInstance) *GameUI {
 		Food:        make(map[int]core.Coord),
 		Snakes:      make(map[peer.ID]*Snake),
 		moveNum: 0,
+		foodLastID: 0,
 		bound: Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}},
 		Over:        false,
 		Successful:  false,
@@ -261,10 +263,10 @@ func (g *GameUI) newFood() {
 
 	x1, y1 := g.bound.TopLeft.X, g.bound.TopLeft.Y
 	x2, y2 := g.bound.BottomRight.X, g.bound.BottomRight.Y
-	c := len(g.Snakes) * (g.moveNum / N) + 2
+	c := len(g.Snakes) + (g.moveNum / N) + 2
 	var cell int
 	if y2-y1-c <= 0 || x2-x1-c <= 0 {
-		cell = 5
+		cell = g.r.Intn(10)
 	} else {
 		cell = g.r.Intn((x2-x1-c)*(y2-y1-c))
 	}
@@ -293,7 +295,8 @@ func (g *GameUI) newFood() {
 				cell--
 			}
 			if cell == 0 {
-				g.Food[len(g.Food)] = core.Coord{X: row, Y: col}
+				g.Food[g.foodLastID] = core.Coord{X: row, Y: col}
+				g.foodLastID++
 				log.Info().Msgf("New food should be created on (%#d, %#d)", row, col)
 				return
 			}
@@ -416,8 +419,20 @@ func (g *GameUI) RunGame(seed int64) {
 	g.r = rand.New(rand.NewSource(seed))
 	// Generate snakes
 	for _, id := range g.gi.PlayersIDs(){
-		start := core.Coord{X: g.r.Intn(g.bound.BottomRight.X - g.bound.TopLeft.X - 1) + 1,
-							Y: g.r.Intn(g.bound.BottomRight.Y - g.bound.TopLeft.Y - 1) + 1}
+		var start core.Coord
+		for {
+			start = core.Coord{X: g.r.Intn(g.bound.BottomRight.X-g.bound.TopLeft.X-1) + 1,
+								Y: g.r.Intn(g.bound.BottomRight.Y-g.bound.TopLeft.Y-1) + 1}
+			flag := true
+			for _, snake := range g.Snakes {
+				if core.EqualCoord(start, snake.Head) {
+					flag = false
+				}
+			}
+			if flag {
+				break
+			}
+		}
 		//log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
 		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
 	}
@@ -466,11 +481,13 @@ func (g *GameUI) RunGame(seed int64) {
 		// Draw GameUI state
 		if g.Over {
 			drawBox(s, g.bound, boxStyle)
-			width, height := 12, 0
+			width, height := 0, 0
 			if g.Successful {
 				height = 4
+				width = len(g.WinnerID.Pretty()) + 10
 			} else {
 				height = 2
+				width = 12
 			}
 			x1 := (g.bound.BottomRight.X - g.bound.TopLeft.X - width) / 2
 			y1 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y - height) / 2
