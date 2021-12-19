@@ -3,6 +3,7 @@ module github.com/kuredoro/snake_p2p
 go 1.17
 
 require (
+	github.com/epiclabs-io/winman v0.0.0-20210113192526-493c730b8c71
 	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/i582/cfmt v1.4.0
@@ -10,10 +11,11 @@ require (
 	github.com/libp2p/go-libp2p-core v0.13.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.0
 	github.com/rs/zerolog v1.26.1
+	github.com/rivo/tview v0.0.0-20211202162923-2a6de950f73b
+	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 )
 
 require (
-	github.com/awesome-gocui/gocui v1.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
@@ -105,7 +107,6 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.30.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/rivo/tview v0.0.0-20211202162923-2a6de950f73b // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
