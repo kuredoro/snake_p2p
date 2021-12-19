@@ -4,7 +4,6 @@ import (
 	"flag"
 	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/engine/console"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/context"
 	"os"
@@ -14,10 +13,11 @@ import (
 
 func main() {
 	//gatherFlag := flag.Int("gather", 0, "create gather point for N players")
+	logNameFlag := flag.String("logname", "ui_logs.txt", "Name of log file")
 	flag.Parse()
 
-	f, _ := os.Create("ui_logs")
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: f})
+	f, _ := os.Create(*logNameFlag)
+	log.Logger = log.Output(f)
 	ctx := context.Background()
 	h, err := snake.New(ctx)
 	if err != nil {
@@ -45,6 +45,6 @@ func main() {
 
 	// Start the application.
 	if err := g.Run(); err != nil {
-		panic("Game Run finished with error")
+		panic("GameUI Run finished with error")
 	}
 }
