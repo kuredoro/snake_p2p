@@ -2,6 +2,7 @@ package gather
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -259,6 +260,7 @@ func (gs *GatherService) meshUpdateLoop() {
 
 			gs.gameCh <- core.GameEstablished{
 				Facilitator: gs.h.ID(),
+				Game:        gs.game.GetInstance(),
 			}
 		}
 	}
@@ -273,14 +275,21 @@ func (gs *GatherService) monitorLoop() {
 		case peerStatus := <-gs.localConnUpdates:
 			switch peerStatus.Alive {
 			case true:
-				// TODO: rename ID to Peer
+				err := gs.game.Connect(context.Background(), peerStatus.Peer)
+				if err != nil {
+					log.Err(err).
+						Str("peer", peerStatus.Peer.Pretty()).
+						Msg("Create new game connection")
+					continue
+				}
+
 				gs.meshCh <- addDoubleEdge(gs.h.ID(), peerStatus.Peer)
 
 				log.Info().
 					Str("seeker", peerStatus.Peer.Pretty()).
 					Msg("Facilitator-seeker connection established")
 
-				err := gs.askEverybodyToConnectTo(peerStatus.Peer)
+				err = gs.askEverybodyToConnectTo(peerStatus.Peer)
 				if err != nil {
 					merr := err.(*multierror.Error)
 					for _, err := range merr.Errors {
@@ -292,12 +301,15 @@ func (gs *GatherService) monitorLoop() {
 					}
 				}
 			case false:
+				gs.game.Disconnect(peerStatus.Peer)
+
 				gs.meshCh <- removeDoubleEdge(gs.h.ID(), peerStatus.Peer)
 
 				gs.peerDisconnected(peerStatus.Peer)
 				/*
-				   The main stream may still be alive
+								   The main stream may still be alive
 
+				                   UPD: decided that if ping dies, the whole thing dies...
 				*/
 
 				log.Info().

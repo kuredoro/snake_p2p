@@ -35,6 +35,8 @@ func (g *GameService) Connect(ctx context.Context, p peer.ID) error {
 		return fmt.Errorf("new game stream: %v", err)
 	}
 
+	s.Write(nil)
+
 	g.instance.AddPeer(s)
 
 	return nil
@@ -55,4 +57,8 @@ func (g *GameService) GameHandler(s network.Stream) {
 
 func (g *GameService) Close() {
 	g.instance.Close()
+}
+
+func (g *GameService) GetInstance() *GameInstance {
+	return g.instance
 }
