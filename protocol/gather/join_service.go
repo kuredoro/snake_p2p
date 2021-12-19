@@ -103,31 +103,40 @@ func (js *JoinService) run() {
 				// impossible to forget to send an error, but then we
 				// have to write a boilerplate wrapper around the funcs.
 				// What will befnefit us in a long run, I wonder...
-				go func() {
-					js.log.Info().
+				// UPD: I've deleted errCh, why do we even use it?
+				// And in GatherService we use _no_ goroutines...
+				// UPD2: I've removed goroutines...
+				err := js.game.Connect(context.Background(), status.Peer)
+				if err != nil {
+					js.log.Err(err).
 						Str("seeker", status.Peer.Pretty()).
 						Msg("New game connection with peer seeker")
+					continue
+				}
 
-					err := js.sendConnected(status.Peer)
-					if err != nil {
-						js.log.Err(err).
-							Str("seeker", status.Peer.Pretty()).
-							Msg("Notify about new seeker-seeker connection")
-					}
-				}()
-			case false:
-				go func() {
-					js.log.Info().
+				js.log.Info().
+					Str("seeker", status.Peer.Pretty()).
+					Msg("New game connection with peer seeker")
+
+				err = js.sendConnected(status.Peer)
+				if err != nil {
+					js.log.Err(err).
 						Str("seeker", status.Peer.Pretty()).
-						Msg("Peer seeker game connection reset")
+						Msg("Notify about new seeker-seeker connection")
+				}
+			case false:
+				js.log.Info().
+					Str("seeker", status.Peer.Pretty()).
+					Msg("Peer seeker game connection reset")
 
-					err := js.sendDisconnected(status.Peer)
-					if err != nil {
-						js.log.Err(err).
-							Str("seeker", status.Peer.Pretty()).
-							Msg("Notify about seeker-seeker connection reset")
-					}
-				}()
+				js.game.Disconnect(status.Peer)
+
+				err := js.sendDisconnected(status.Peer)
+				if err != nil {
+					js.log.Err(err).
+						Str("seeker", status.Peer.Pretty()).
+						Msg("Notify about seeker-seeker connection reset")
+				}
 			}
 		case ok := <-readCh:
 			if !ok {
@@ -201,6 +210,7 @@ func (js *JoinService) run() {
 
 				js.gameCh <- core.GameEstablished{
 					Facilitator: js.stream.Conn().RemotePeer(),
+					Game:        js.game.GetInstance(),
 				}
 				continue
 			default:
