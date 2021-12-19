@@ -2,13 +2,15 @@ package console
 
 import (
 	"fmt"
+	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"log"
+	//"strconv"
+
+	//"log"
 	"math/rand"
 	"os"
-	"strconv"
 	"time"
-
+	"github.com/rs/zerolog/log"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kuredoro/snake_p2p/core"
 	//"github.com/sanity-io/litter"
@@ -21,25 +23,31 @@ type Snake struct {
 	Style tcell.Style
 }
 
-type Game struct {
-	Ch          chan interface{}
+type GameUI struct {
+	gi          *game.GameInstance
 	Snakes      map[peer.ID]*Snake
 	Food        map[int]core.Coord
+	bound 		Boundary
+	moveNum		int
 	AliveSnakes int
 	Over        bool
-	WinnerID    int
+	Successful bool
+	WinnerID    peer.ID
 }
 
-func GameInit(ch chan interface{}) *Game {
-	game := &Game{
-		Ch:          ch,
+// add food every N moves
+const N = 3
+
+func NewGame(gi *game.GameInstance) *GameUI {
+	return &GameUI{
+		gi:          gi,
 		Food:        make(map[int]core.Coord),
 		Snakes:      make(map[peer.ID]*Snake),
-		AliveSnakes: 0,
+		moveNum: 0,
+		bound: Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}},
 		Over:        false,
-		WinnerID:    -1,
+		Successful:  false,
 	}
-	return game
 }
 
 type Boundary struct {
@@ -137,6 +145,13 @@ func drawGridCell(s tcell.Screen, cell core.Coord, style tcell.Style, boundary B
 	return nil
 }
 
+var defColors = map[tcell.Color]struct{}{
+	tcell.ColorReset:  {},
+	tcell.ColorWhite:  {},
+	tcell.ColorPurple: {},
+	tcell.ColorRed:    {},
+}
+
 func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
 	color := tcell.PaletteColor(rand.Intn(256))
 	_, ok := defColors[color]
@@ -152,115 +167,342 @@ func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
 	return style
 }
 
-var defColors = map[tcell.Color]struct{}{
-	tcell.ColorReset:  {},
-	tcell.ColorWhite:  {},
-	tcell.ColorPurple: {},
-	tcell.ColorRed:    {},
-}
-
-func (game *Game) handleGameEvent(event interface{}) {
-	switch event := event.(type) {
-	case core.PlayerStarts:
-		game.AliveSnakes = len(event.Players)
-		for id, start := range event.Players {
-			game.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
-		}
-	case core.NewFood:
-		game.Food[event.FoodID] = event.Pos
-	case core.PlayerMoves:
-		for id, dir := range event.Moves {
-			prevHead := game.Snakes[id].Head
-			// move snake's head
-			switch dir {
-			case core.Up:
-				game.Snakes[id].Head.Y--
-			case core.Left:
-				game.Snakes[id].Head.X--
-			case core.Right:
-				game.Snakes[id].Head.X++
-			case core.Down:
-				game.Snakes[id].Head.Y++
-			default:
-				panic("the value of direction is unknown")
-			}
-
-			// move snakes body
-			if len(game.Snakes[id].Body) == 0 {
+func (g *GameUI) markDead (newHeadCoord map[peer.ID]core.Coord) {
+	// Check snakes for death
+	for id1, coord1 := range newHeadCoord {
+		// head into head
+		for id2, coord2 := range newHeadCoord {
+			if id1.Pretty() == id2.Pretty() {
 				continue
 			}
-			for i := len(game.Snakes[id].Body) - 1; i > 0; i-- {
-				game.Snakes[id].Body[i] = game.Snakes[id].Body[i-1]
+			if core.EqualCoord(coord1, coord2) {
+				g.Snakes[id1].Alive = false
+				g.Snakes[id2].Alive = false
+				g.AliveSnakes -= 2
 			}
-			game.Snakes[id].Body[0] = prevHead
 		}
-	case core.FoodEaten:
-		delete(game.Food, event.FoodID)
-	case core.PushSegment:
-		game.Snakes[event.SnakeID].Body = append(game.Snakes[event.SnakeID].Body, event.Pos)
-	case core.PlayerDied:
-		game.Snakes[event.SnakeID].Alive = false
-	case core.GameOver:
-		game.Over = true
-		if event.Successful {
-			game.WinnerID = event.Winner
+		// head into body
+		for _, snake := range g.Snakes {
+			if core.EqualCoord(snake.Head, coord1) {
+				g.Snakes[id1].Alive = false
+				g.AliveSnakes--
+				break
+			}
+			for _, b := range snake.Body {
+				if core.EqualCoord(b, coord1) {
+					g.Snakes[id1].Alive = false
+					g.AliveSnakes--
+					break
+				}
+			}
 		}
-	case core.Tick:
 	}
 }
 
-func (game *Game) RunGame() {
-	// Define Game styles
+func (g *GameUI) goodCoord(coord core.Coord) core.Coord {
+	if coord.X == g.bound.TopLeft.X {
+		coord = core.Coord{X: g.bound.BottomRight.X - 1, Y: coord.Y}
+	}
+	if coord.X == g.bound.BottomRight.X {
+		coord = core.Coord{X: g.bound.TopLeft.X + 1, Y: coord.Y}
+	}
+	if coord.Y == g.bound.TopLeft.Y {
+		coord = core.Coord{X: coord.X, Y: g.bound.BottomRight.Y - 1}
+	}
+	if coord.Y == g.bound.BottomRight.Y {
+		coord = core.Coord{X: coord.X, Y: g.bound.TopLeft.Y + 1}
+	}
+	return coord
+}
+
+func (g *GameUI) handleOutOfBoundary(newHeadCoord *map[peer.ID]core.Coord) {
+	for id, coord := range *newHeadCoord {
+		(*newHeadCoord)[id] = g.goodCoord(coord)
+	}
+}
+
+func (g *GameUI) eatFood(newHeadCoord map[peer.ID]core.Coord) {
+	for id, coord := range newHeadCoord {
+		for foodID, foodCoord := range g.Food {
+			if !core.EqualCoord(coord, foodCoord) {
+				continue
+			}
+			// add segment to snake
+			g.Snakes[id].Body = append(g.Snakes[id].Body, core.Coord{})
+			// remove food from field
+			delete(g.Food, foodID)
+			log.Info().Msgf("Food on (%#d, %#d) eaten by %#s", coord.X, coord.Y, id.Pretty())
+		}
+	}
+}
+
+func (g *GameUI) moveSnakes(newHeadCoord map[peer.ID]core.Coord) {
+	for id, coord := range newHeadCoord {
+		// move head
+		prevHead := g.Snakes[id].Head
+		g.Snakes[id].Head = coord
+		log.Info().Msgf("New coordinates (%#d, %#d) for snake %#s", g.Snakes[id].Head.X, g.Snakes[id].Head.Y, id.Pretty())
+		// move snakes body
+		if len(g.Snakes[id].Body) == 0 {
+			continue
+		}
+		for i := len(g.Snakes[id].Body) - 1; i > 0; i-- {
+			g.Snakes[id].Body[i] = g.Snakes[id].Body[i-1]
+		}
+		g.Snakes[id].Body[0] = prevHead
+	}
+}
+
+func (g *GameUI) newFood() {
+	if g.moveNum % N != 0 {
+		return
+	}
+
+	x1, y1 := g.bound.TopLeft.X, g.bound.TopLeft.Y
+	x2, y2 := g.bound.BottomRight.X, g.bound.BottomRight.Y
+	c := len(g.Snakes) * (g.moveNum / N) + 2
+	cell := rand.Intn((x2-x1-c)*(y2-y1-c))
+	for row := x1 + 1; row < x2; row++ {
+		for col := y1 + 1; col < y2; col++ {
+			flag := true
+			for _, snake := range g.Snakes {
+				if snake.Head.X == row && snake.Head.Y == col {
+					flag = false
+					break
+				}
+				for _, b := range snake.Body {
+					if b.X == row && b.Y == col {
+						flag = false
+						break
+					}
+				}
+			}
+			for _, f := range g.Food {
+				if f.X == row && f.Y == col {
+					flag = false
+					break
+				}
+			}
+			if flag {
+				cell--
+			}
+			if cell == 0 {
+				g.Food[len(g.Food)] = core.Coord{X: row, Y: col}
+				log.Info().Msgf("New food should be created on (%#d, %#d)", row, col)
+				return
+			}
+		}
+	}
+}
+
+func (g *GameUI) isOver() bool {
+	if g.AliveSnakes == 1 {
+		g.Over = true
+		g.Successful = true
+		for id, snake := range g.Snakes {
+			if snake.Alive {
+				g.WinnerID = id
+				break
+			}
+		}
+	} else if g.AliveSnakes < 1 {
+		g.Over = true
+		g.Successful = false
+	}
+	return g.Over
+}
+
+func (g *GameUI) handleMoves(moves core.PlayerMoves) {
+	newHeadCoord := make(map[peer.ID]core.Coord)
+	for id, dir := range moves.Moves {
+		switch dir {
+		case core.Up:
+			newHeadCoord[id] = core.Coord{X: g.Snakes[id].Head.X, Y: g.Snakes[id].Head.Y - 1}
+		case core.Left:
+			newHeadCoord[id] = core.Coord{X: g.Snakes[id].Head.X - 1, Y: g.Snakes[id].Head.Y}
+		case core.Right:
+			newHeadCoord[id] = core.Coord{X: g.Snakes[id].Head.X + 1, Y: g.Snakes[id].Head.Y}
+		case core.Down:
+			newHeadCoord[id] = core.Coord{X: g.Snakes[id].Head.X, Y: g.Snakes[id].Head.Y + 1}
+		default:
+			panic("the value of direction is unknown")
+		}
+	}
+	log.Info().Msgf("New heads before: %#v", newHeadCoord)
+	g.handleOutOfBoundary(&newHeadCoord)
+	log.Info().Msgf("New heads after: %#v", newHeadCoord)
+	g.markDead(newHeadCoord)
+	if g.isOver() {
+		return
+	}
+	g.eatFood(newHeadCoord)
+	g.moveSnakes(newHeadCoord)
+	g.newFood()
+	g.moveNum++
+	log.Info().Msgf("Next move %#d", g.moveNum)
+}
+
+func (g *GameUI) checkMove(move core.Coord) bool {
+	id := g.gi.SelfID()
+	if len(g.Snakes[id].Body) > 0 {
+		if g.Snakes[id].Body[0] == move {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
+	id := g.gi.SelfID()
+	if ev.Key() == tcell.KeyUp {
+		snake := g.Snakes[id]
+		move := g.goodCoord(core.Coord{X: snake.Head.X, Y: snake.Head.Y - 1})
+		if !g.checkMove(move) {
+			return
+		}
+		err := g.gi.SendMove(core.Up)
+		if err != nil {
+			log.Err(err).Int("move", int(core.Up)).Msg("Key pressed")
+		}
+
+		log.Info().Int("move", int(core.Up)).Msg("Key pressed")
+
+	}
+	if ev.Key() == tcell.KeyDown {
+		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X, Y: g.Snakes[id].Head.Y + 1})
+		if !g.checkMove(move) {
+			return
+		}
+		err := g.gi.SendMove(core.Down)
+		if err != nil {
+			log.Err(err).Int("move", int(core.Down)).Msg("Key pressed")
+		}
+
+		log.Info().Int("move", int(core.Down)).Msg("Key pressed")
+
+	}
+	if ev.Key() == tcell.KeyRight {
+		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X + 1, Y: g.Snakes[id].Head.Y})
+		if !g.checkMove(move) {
+			return
+		}
+		err := g.gi.SendMove(core.Right)
+		if err != nil {
+			log.Err(err).Int("move", int(core.Right)).Msg("Key pressed")
+		}
+		log.Info().Int("move", int(core.Right)).Msg("Key pressed")
+
+	}
+	if ev.Key() == tcell.KeyLeft {
+		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X - 1, Y: g.Snakes[id].Head.Y})
+		if !g.checkMove(move) {
+			return
+		}
+		err := g.gi.SendMove(core.Left)
+		if err != nil {
+			log.Err(err).Int("move", int(core.Left)).Msg("Key pressed")
+		}
+		log.Info().Int("move", int(core.Left)).Msg("Key pressed")
+
+	}
+}
+
+func (g *GameUI) RunGame(seed int64) {
+	rand.Seed(seed)
+	// Generate snakes
+	for _, id := range g.gi.PlayersIDs(){
+		start := core.Coord{X: rand.Intn(g.bound.BottomRight.X - g.bound.TopLeft.X - 1) + 1,
+			Y: rand.Intn(g.bound.BottomRight.Y - g.bound.TopLeft.Y - 1) + 1}
+		//log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
+		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
+	}
+	g.AliveSnakes = len(g.Snakes)
+	// Define GameUI styles
 	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
 	blackBoxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
 
-	// Define Game field
-	boundary := Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}}
-
-	// Initialize Game Screen
+	// Initialize GameUI Screen
 	s, err := tcell.NewScreen()
 	if err != nil {
-		log.Fatalf("%+v", err)
+		log.Err(err)
 	}
 	if err := s.Init(); err != nil {
-		log.Fatalf("%+v", err)
+		log.Err(err)
 	}
 	s.DisableMouse()
 	s.EnablePaste()
 	s.Clear()
 	s.SetStyle(defStyle)
 
-	// Define function to quit the Game
+	// Define function to quit the GameUI
 	quit := func() {
 		s.Fini()
 		os.Exit(0)
 	}
 
-	// Game loop
+	// GameUI loop
 	for {
-		after := time.After(20 * time.Millisecond) // update Game Screen every 20 milliseconds
-		// Process Game event
-	protocolEvents:
-		for {
-			select {
-			case event, ok := <-game.Ch:
-				if !ok {
-					// s.Fini()
-					panic("Channel is closed")
+		after := time.After(20 * time.Millisecond) // update GameUI Screen every 20 milliseconds
+		// Process GameUI event
+		select {
+		case moves, ok := <-g.gi.IncommingMoves():
+			if !ok {
+				// s.Fini()
+				panic("Channel is closed")
+			}
+			log.Info().Msgf("Incoming message %#v", moves.Moves)
+			g.handleMoves(moves)
+		case <-after:
+			break
+		}
+
+		// Draw GameUI state
+		if g.Over {
+			drawBox(s, g.bound, boxStyle)
+			width, height := 12, 0
+			if g.Successful {
+				height = 4
+			} else {
+				height = 2
+			}
+			x1 := (g.bound.BottomRight.X - g.bound.TopLeft.X - width) / 2
+			y1 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y - height) / 2
+			x2 := (g.bound.BottomRight.X - g.bound.TopLeft.X + width) / 2
+			y2 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y + height) / 2
+			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
+			drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "GameUI Over")
+			if g.Successful {
+				text := "WinnerID " + g.WinnerID.Pretty()
+				drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
+			}
+		} else {
+			drawBox(s, g.bound, boxStyle)
+			for id, snake := range g.Snakes {
+				if !snake.Alive {
+					continue
 				}
-
-				game.handleGameEvent(event)
-
-				/*
-				   fmt.Printf("EVENT %#v\n", event)
-				   litter.Dump(game)
-				*/
-			case <-after:
-				break protocolEvents
+				err := drawSnake(s, id, snake, g.bound)
+				if err != nil {
+					s.Fini()
+					log.Err(err)
+					os.Exit(0)
+				}
+				//log.Info().Msg("Drew snake")
+			}
+			for _, f := range g.Food {
+				err := drawFood(s, f, foodStyle, g.bound)
+				if err != nil {
+					s.Fini()
+					fmt.Println(err)
+					log.Err(err)
+					os.Exit(0)
+				}
+				//log.Info().Msg("Drew food")
 			}
 		}
+		s.Show()
 
 		if s.HasPendingEvent() {
 			// Poll event
@@ -273,53 +515,11 @@ func (game *Game) RunGame() {
 				if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
 					quit()
 				}
+				if g.Over && ev.Key() == tcell.KeyEnter {
+					quit()
+				}
+				g.handleKeyEvent(ev)
 			}
 		}
-
-		// Draw Game state
-		//s.Clear()
-		if game.Over {
-			drawBox(s, boundary, boxStyle)
-			width, height := 12, 0
-			if game.WinnerID != -1 {
-				height = 4
-			} else {
-				height = 2
-			}
-			x1 := (boundary.BottomRight.X - boundary.TopLeft.X - width) / 2
-			y1 := (boundary.BottomRight.Y - boundary.TopLeft.Y - height) / 2
-			x2 := (boundary.BottomRight.X - boundary.TopLeft.X + width) / 2
-			y2 := (boundary.BottomRight.Y - boundary.TopLeft.Y + height) / 2
-			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
-			drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "Game Over")
-			if game.WinnerID != -1 {
-				text := "WinnerID " + strconv.Itoa(game.WinnerID)
-				drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
-			}
-			s.Show()
-			continue
-		}
-		drawBox(s, boundary, boxStyle)
-		for id, snake := range game.Snakes {
-			if !snake.Alive {
-				continue
-			}
-			err := drawSnake(s, id, snake, boundary)
-			if err != nil {
-				s.Fini()
-				log.Fatalf("%+v", err)
-				os.Exit(0)
-			}
-		}
-		for _, f := range game.Food {
-			err := drawFood(s, f, foodStyle, boundary)
-			if err != nil {
-				s.Fini()
-				fmt.Println(err)
-				log.Fatalf("%+v", err)
-				os.Exit(0)
-			}
-		}
-		s.Show()
 	}
 }
