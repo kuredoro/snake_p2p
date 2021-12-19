@@ -4,8 +4,8 @@ import (
 	"context"
 	"flag"
 	"os"
-	"os/signal"
-	"syscall"
+	//	"os/signal"
+	//"syscall"
 	"time"
 
 	snake "github.com/kuredoro/snake_p2p"
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	// signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	gatherPoints := make(map[peer.ID]*gather.GatherPointMessage)
 	for {
@@ -53,17 +53,22 @@ func main() {
 
 			gi := info.Game
 			gi.Run()
-			err := gi.SendMove(core.Up)
-			if err != nil {
-				log.Err(err).Msg("Test move")
-			}
 
-			for i := 0; i < gi.PeerCount(); i++ {
-				// Demonstration purpose only
+			for i := 0; i < 3; i++ {
+				err := gi.SendMove(core.Up)
+				if err != nil {
+					log.Err(err).Msg("Test move")
+				}
+
+				log.Info().Msg("Sent move")
+
 				move := <-gi.IncommingMoves()
-				log.Info().
-					Int("dir", int(move.Moves[0])).
-					Msg("Received move")
+				for peer, dir := range move.Moves {
+					log.Info().
+						Str("peer", peer.Pretty()).
+						Int("dir", int(dir)).
+						Msg("Player moved")
+				}
 			}
 
 			os.Exit(0)

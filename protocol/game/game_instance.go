@@ -18,25 +18,36 @@ type GameEstablished struct {
 	Game        *GameInstance
 }
 
-type GameInstance struct {
-	done    chan struct{}
-	streams map[peer.ID]network.Stream
+type playerMove struct {
+	ID  peer.ID
+	Dir core.Direction
+}
 
-	recv chan core.PlayerMove
+type GameInstance struct {
+	done       chan struct{}
+	finishedCh chan struct{}
+	streams    map[peer.ID]network.Stream
+	selfID     peer.ID
+
+	recv       chan core.PlayerMoves
+	moves      chan playerMove
+	myLastMove core.Direction
 
 	mu sync.Mutex
 }
 
 func NewGameInstance() *GameInstance {
 	return &GameInstance{
-		done:    make(chan struct{}),
-		streams: make(map[peer.ID]network.Stream),
+		done:       make(chan struct{}),
+		finishedCh: make(chan struct{}),
+		streams:    make(map[peer.ID]network.Stream),
 
-		recv: make(chan core.PlayerMove),
+		recv:  make(chan core.PlayerMoves),
+		moves: make(chan playerMove),
 	}
 }
 
-func (gi *GameInstance) IncommingMoves() <-chan core.PlayerMove {
+func (gi *GameInstance) IncommingMoves() <-chan core.PlayerMoves {
 	return gi.recv
 }
 
@@ -80,8 +91,13 @@ func (gi *GameInstance) Close() {
 		}
 	}
 
-	gi.done <- struct{}{}
-	<-gi.done
+	close(gi.done)
+	<-gi.finishedCh
+	for range gi.streams {
+		<-gi.finishedCh
+	}
+
+	gi.done = make(chan struct{})
 }
 
 func (gi *GameInstance) PeerCount() int {
@@ -97,13 +113,21 @@ func (gi *GameInstance) Run() {
 	defer gi.mu.Unlock()
 
 	for _, s := range gi.streams {
+		if gi.selfID == "" {
+			gi.selfID = s.Conn().LocalPeer()
+		}
+
 		go gi.readLoop(s)
 	}
+
+	go gi.syncLoop()
 }
 
 func (gi *GameInstance) SendMove(move core.Direction) (err error) {
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
+
+	gi.myLastMove = move
 
 	// TODO: have a sane protocol, not just numbers flying around...
 	msg := strconv.Itoa(int(move)) + "\n"
@@ -151,7 +175,7 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 				<-readCh // When stream has closed, .Scan() should quit
 			}
 
-			close(gi.done)
+			gi.finishedCh <- struct{}{}
 			return
 		case ok := <-readCh:
 			if !ok {
@@ -174,15 +198,39 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 				log.Err(err).
 					Str("player", remotePeer.Pretty()).
 					Msg("Parse player move")
+
+				go scan()
 				continue
 			}
 
 			dir := core.Direction(n)
 
-			gi.recv <- core.PlayerMove{
-				Moves: map[int]core.Direction{
-					0: dir,
-				},
+			gi.moves <- playerMove{
+				ID:  remotePeer,
+				Dir: dir,
+			}
+
+			go scan()
+		}
+	}
+}
+
+func (gi *GameInstance) syncLoop() {
+	msg := core.PlayerMoves{
+		Moves: make(map[peer.ID]core.Direction),
+	}
+
+	for peerMove := range gi.moves {
+		msg.Moves[peerMove.ID] = peerMove.Dir
+
+		log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
+
+		if len(msg.Moves) == gi.PeerCount() {
+			msg.Moves[gi.selfID] = gi.myLastMove
+			gi.recv <- msg
+
+			msg = core.PlayerMoves{
+				Moves: make(map[peer.ID]core.Direction),
 			}
 		}
 	}

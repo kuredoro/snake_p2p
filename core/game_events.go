@@ -1,11 +1,13 @@
 package core
 
+import "github.com/libp2p/go-libp2p-core/peer"
+
 type Coord struct {
 	X, Y int
 }
 
 type PlayerStarts struct {
-	Players map[int]Coord // map from player's SnakeID to its start coordinates
+	Players map[peer.ID]Coord // map from player's SnakeID to its start coordinates
 }
 
 type NewFood struct {
@@ -22,12 +24,12 @@ const (
 	Left
 )
 
-type PlayerMove struct {
-	Moves map[int]Direction // map from player's SnakeID to direction of it's move
+type PlayerMoves struct {
+	Moves map[peer.ID]Direction // map from player's SnakeID to direction of it's move
 }
 
 type PlayerDied struct {
-	SnakeID int // SnakeID of player who died
+	SnakeID peer.ID // SnakeID of player who died
 }
 
 type FoodEaten struct {
