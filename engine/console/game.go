@@ -2,17 +2,18 @@ package console
 
 import (
 	"fmt"
+	"math/rand"
+	"os"
+	"time"
+
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/libp2p/go-libp2p-core/peer"
 	//"strconv"
 
 	//"log"
-	"math/rand"
-	"os"
-	"time"
-	"github.com/rs/zerolog/log"
 	"github.com/gdamore/tcell/v2"
 	"github.com/kuredoro/snake_p2p/core"
+	"github.com/rs/zerolog/log"
 	//"github.com/sanity-io/litter"
 )
 
@@ -27,14 +28,14 @@ type GameUI struct {
 	gi          *game.GameInstance
 	Snakes      map[peer.ID]*Snake
 	Food        map[int]core.Coord
-	bound 		Boundary
-	moveNum		int
+	bound       Boundary
+	moveNum     int
 	AliveSnakes int
-	foodLastID int
+	foodLastID  int
 	Over        bool
 	Successful  bool
 	WinnerID    peer.ID
-	r			*rand.Rand
+	r           *rand.Rand
 }
 
 // add food every N moves
@@ -42,14 +43,14 @@ const N = 5
 
 func NewGame(gi *game.GameInstance) *GameUI {
 	return &GameUI{
-		gi:          gi,
-		Food:        make(map[int]core.Coord),
-		Snakes:      make(map[peer.ID]*Snake),
-		moveNum: 0,
+		gi:         gi,
+		Food:       make(map[int]core.Coord),
+		Snakes:     make(map[peer.ID]*Snake),
+		moveNum:    0,
 		foodLastID: 0,
-		bound: Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}},
-		Over:        false,
-		Successful:  false,
+		bound:      Boundary{core.Coord{X: 1, Y: 1}, core.Coord{X: 81, Y: 41}},
+		Over:       false,
+		Successful: false,
 	}
 }
 
@@ -121,7 +122,7 @@ func drawSnake(s tcell.Screen, ID peer.ID, snake *Snake, boundary Boundary) erro
 	if boundary.Contains(snake.Head) {
 		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
-	//id := []rune(strconv.Itoa(ID))
+	// id := []rune(strconv.Itoa(ID))
 	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneDiamond, nil, snake.Style)
 	for _, point := range snake.Body {
 		if boundary.Contains(point) {
@@ -170,7 +171,7 @@ func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
 	return style
 }
 
-func (g *GameUI) markDead (newHeadCoord map[peer.ID]core.Coord) {
+func (g *GameUI) markDead(newHeadCoord map[peer.ID]core.Coord) {
 	// Check snakes for death
 	for id1, coord1 := range newHeadCoord {
 		// head into head
@@ -257,7 +258,7 @@ func (g *GameUI) moveSnakes(newHeadCoord map[peer.ID]core.Coord) {
 }
 
 func (g *GameUI) newFood() {
-	if g.moveNum % N != 0 {
+	if g.moveNum%N != 0 {
 		return
 	}
 
@@ -268,7 +269,7 @@ func (g *GameUI) newFood() {
 	if y2-y1-c <= 0 || x2-x1-c <= 0 {
 		cell = g.r.Intn(10)
 	} else {
-		cell = g.r.Intn((x2-x1-c)*(y2-y1-c))
+		cell = g.r.Intn((x2 - x1 - c) * (y2 - y1 - c))
 	}
 	for row := x1 + 1; row < x2; row++ {
 		for col := y1 + 1; col < y2; col++ {
@@ -418,11 +419,13 @@ func (g *GameUI) RunGame(seed int64) {
 	rand.Seed(seed)
 	g.r = rand.New(rand.NewSource(seed))
 	// Generate snakes
-	for _, id := range g.gi.PlayersIDs(){
+	for _, id := range g.gi.PlayersIDs() {
 		var start core.Coord
 		for {
-			start = core.Coord{X: g.r.Intn(g.bound.BottomRight.X-g.bound.TopLeft.X-1) + 1,
-								Y: g.r.Intn(g.bound.BottomRight.Y-g.bound.TopLeft.Y-1) + 1}
+			start = core.Coord{
+				X: g.r.Intn(g.bound.BottomRight.X-g.bound.TopLeft.X-1) + 1,
+				Y: g.r.Intn(g.bound.BottomRight.Y-g.bound.TopLeft.Y-1) + 1,
+			}
 			flag := true
 			for _, snake := range g.Snakes {
 				if core.EqualCoord(start, snake.Head) {
@@ -433,7 +436,7 @@ func (g *GameUI) RunGame(seed int64) {
 				break
 			}
 		}
-		//log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
+		// log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
 		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
 	}
 	g.AliveSnakes = len(g.Snakes)
@@ -464,20 +467,6 @@ func (g *GameUI) RunGame(seed int64) {
 
 	// GameUI loop
 	for {
-		after := time.After(20 * time.Millisecond) // update GameUI Screen every 20 milliseconds
-		// Process GameUI event
-		select {
-		case moves, ok := <-g.gi.IncommingMoves():
-			if !ok {
-				// s.Fini()
-				panic("Channel is closed")
-			}
-			log.Info().Msgf("Incoming message %#v", moves.Moves)
-			g.handleMoves(moves)
-		case <-after:
-			break
-		}
-
 		// Draw GameUI state
 		if g.Over {
 			drawBox(s, g.bound, boxStyle)
@@ -511,7 +500,7 @@ func (g *GameUI) RunGame(seed int64) {
 					log.Err(err)
 					os.Exit(0)
 				}
-				//log.Info().Msg("Drew snake")
+				// log.Info().Msg("Drew snake")
 			}
 			for _, f := range g.Food {
 				err := drawFood(s, f, foodStyle, g.bound)
@@ -521,7 +510,7 @@ func (g *GameUI) RunGame(seed int64) {
 					log.Err(err)
 					os.Exit(0)
 				}
-				//log.Info().Msg("Drew food")
+				// log.Info().Msg("Drew food")
 			}
 		}
 		s.Show()
@@ -541,6 +530,23 @@ func (g *GameUI) RunGame(seed int64) {
 					quit()
 				}
 				g.handleKeyEvent(ev)
+
+				// TODO: spare me...
+			getIncomming:
+				for {
+					select {
+					case moves, ok := <-g.gi.IncommingMoves():
+						// Process GameUI event
+						if !ok {
+							// s.Fini()
+							panic("Channel is closed")
+						}
+						log.Info().Msgf("Incoming message %#v", moves.Moves)
+						g.handleMoves(moves)
+						break getIncomming
+						}
+					}
+				}
 			}
 		}
 	}
