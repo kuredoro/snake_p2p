@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
+	"github.com/kuredoro/snake_p2p/protocol/gather"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
+	"os"
 	"strconv"
 	"time"
 )
@@ -19,7 +22,7 @@ type GatherUI struct {
 	createBtn *tview.Button
 	newGame *tview.InputField
 	maxPlayers int
-	joinGames int
+	gatherPoints map[peer.ID]*gather.GatherPointMessage
 }
 
 func checkNewGameField(textToCheck string, lastChar rune) bool {
@@ -34,6 +37,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 	g := &GatherUI{}
 	g.h = h
 	g.app = tview.NewApplication()
+	g.gatherPoints = make(map[peer.ID]*gather.GatherPointMessage)
 	g.myGatherPoint = tview.NewTextView().
 						SetRegions(true).
 						SetDynamicColors(true).
@@ -55,7 +59,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
 	table.SetCell(1, 2, tableCell)
-	tableCell = tview.NewTableCell("Signed").
+	tableCell = tview.NewTableCell("Joined").
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
@@ -98,6 +102,82 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 	return g
 }
 
-func (gatherUI *GatherUI)Run() error {
-	return gatherUI.app.Run()
+func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int) {
+	ID := msg.ConnectTo.ID.Pretty()
+	tableCell := tview.NewTableCell(ID).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 1, tableCell)
+	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
+	tableCell = tview.NewTableCell(maxPlayers).
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 2, tableCell)
+	tableCell = tview.NewTableCell("").
+		SetTextColor(tcell.ColorWhite).
+		SetAlign(tview.AlignCenter).
+		SetExpansion(1)
+	table.SetCell(row, 3, tableCell)
+}
+
+func (g *GatherUI) eventLoop() {
+	sigCh := make(chan os.Signal, 1)
+	for {
+		select {
+		case info := <-g.h.EstablishedGames:
+			log.Info().
+				Str("facilitator", info.Facilitator.Pretty()).
+				Int("peer_count", info.Game.PeerCount()).
+				Msg("Game established")
+
+			//gi := info.Game
+			//gi.Run()
+			//
+			//for i := 0; i < 3; i++ {
+			//	err := gi.SendMove(core.Up)
+			//	if err != nil {
+			//		log.Err(err).Msg("Test move")
+			//	}
+			//
+			//	log.Info().Msg("Sent move")
+			//
+			//	move := <-gi.IncommingMoves()
+			//	for peer, dir := range move.Moves {
+			//		log.Info().
+			//			Str("peer", peer.Pretty()).
+			//			Int("dir", int(dir)).
+			//			Msg("Player moved")
+			//	}
+			//}
+
+			os.Exit(0)
+		case msg := <-g.h.GatherPoints:
+			if _, exists := g.gatherPoints[msg.ConnectTo.ID]; exists {
+				continue
+			}
+
+			log.Info().
+				Str("facilitator", msg.ConnectTo.ID.Pretty()).
+				Uint("desired_player_count", msg.DesiredPlayerCount).
+				Msg("Found new gather point")
+
+			g.gatherPoints[msg.ConnectTo.ID] = msg
+			// Add cell to gather points table
+			addRow(g.gameList, msg, len(g.gatherPoints) + 1)
+			//err := g.h.JoinGatherPoint(ctx, msg.ConnectTo)
+			//if err != nil {
+			//	log.Err(err).Msg("Join gather point")
+			//}
+		case <-sigCh:
+			g.h.Close()
+			return
+		}
+	}
+}
+
+func (g *GatherUI) Run() error {
+	go g.eventLoop()
+	return g.app.Run()
 }
