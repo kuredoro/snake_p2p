@@ -3,6 +3,7 @@ package game
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"sync"
 
@@ -28,6 +29,7 @@ type GameInstance struct {
 	finishedCh chan struct{}
 	streams    map[peer.ID]network.Stream
 	selfID     peer.ID
+	Seed       int64
 
 	recv       chan core.PlayerMoves
 	moves      chan playerMove
@@ -108,7 +110,9 @@ func (gi *GameInstance) PeerCount() int {
 	return n
 }
 
-func (gi *GameInstance) Run() {
+func (gi *GameInstance) Run() int64 {
+	gi.Seed = int64(gi.negotiateSeed())
+
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
 
@@ -121,6 +125,70 @@ func (gi *GameInstance) Run() {
 	}
 
 	go gi.syncLoop()
+
+	return gi.Seed
+}
+
+func ToBytesUint32(n uint32) []byte {
+	b := make([]byte, 4)
+	for i := 0; n != 0 && i < 4; i++ {
+		b[i] = byte(n & 0xFF)
+		n >>= 8
+	}
+
+	return b
+}
+
+func ToUint32Bytes(b []byte) (n uint32) {
+	for k := 0; k < 4; k++ {
+		// TODO: precedance?
+		n |= uint32(b[k]) << (8 * k)
+	}
+
+	return
+}
+
+func (gi *GameInstance) negotiateSeed() uint32 {
+	gi.mu.Lock()
+	defer gi.mu.Unlock()
+
+	// TODO: TextMarshaller interface
+	my := rand.Uint32()
+	myBytes := ToBytesUint32(my)
+
+	for peer, s := range gi.streams {
+		_, err := s.Write(myBytes)
+		if err != nil {
+			log.Err(err).
+				Str("peer", peer.Pretty()).
+				Msg("Send our random piece")
+		}
+	}
+
+	otherBytes := make([]byte, 4)
+	for peer, s := range gi.streams {
+		_, err := s.Read(otherBytes)
+		if err != nil {
+			log.Err(err).
+				Str("peer", peer.Pretty()).
+				Msg("Receive other random piece")
+			continue
+		}
+
+		log.Debug().
+			Str("peer", peer.Pretty()).
+			Uint32("piece", ToUint32Bytes(otherBytes)).
+			Msg("Receive other random piece")
+
+		for i, other := range otherBytes {
+			myBytes[i] ^= other
+		}
+	}
+
+	seed := ToUint32Bytes(myBytes)
+	log.Info().Uint32("seed", seed).Msg("Negotiated random seed")
+
+	return seed
 }
 
 func (gi *GameInstance) SendMove(move core.Direction) (err error) {

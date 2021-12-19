@@ -52,7 +52,9 @@ func main() {
 				Msg("Game established")
 
 			gi := info.Game
-			gi.Run()
+			seed := gi.Run()
+
+			log.Info().Int64("seed", seed).Msg("Got new seed")
 
 			for i := 0; i < 3; i++ {
 				err := gi.SendMove(core.Up)
