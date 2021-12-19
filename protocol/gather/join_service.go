@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/kuredoro/snake_p2p/core"
+	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -21,6 +22,7 @@ type JoinService struct {
 
 	h            host.Host
 	ping         *ping.PingService
+	game         *game.GameService
 	stream       network.Stream
 	conns        map[peer.ID]*heartbeat.HeartbeatService
 	connHealthCh chan heartbeat.PeerStatus
@@ -30,7 +32,7 @@ type JoinService struct {
 	gameCh chan<- core.GameEstablished
 }
 
-func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pID peer.ID, gameCh chan<- core.GameEstablished) (*JoinService, error) {
+func NewJoinService(ctx context.Context, h host.Host, game *game.GameService, ping *ping.PingService, pID peer.ID, gameCh chan<- core.GameEstablished) (*JoinService, error) {
 	stream, err := h.NewStream(ctx, pID, ID)
 	if err != nil {
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
@@ -43,6 +45,7 @@ func NewJoinService(ctx context.Context, h host.Host, ping *ping.PingService, pI
 
 		h:            h,
 		ping:         ping,
+		game:         game,
 		stream:       stream,
 		conns:        make(map[peer.ID]*heartbeat.HeartbeatService),
 		connHealthCh: make(chan heartbeat.PeerStatus),

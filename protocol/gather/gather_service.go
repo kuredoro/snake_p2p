@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 
 	"github.com/kuredoro/snake_p2p/core"
+	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 
 	"github.com/rs/zerolog/log"
@@ -56,6 +57,7 @@ type GatherService struct {
 	meshCh chan peerMeshMod
 
 	ping             *ping.PingService
+	game             *game.GameService
 	conns            map[peer.ID]*heartbeat.HeartbeatService
 	localConnUpdates chan heartbeat.PeerStatus
 
@@ -65,7 +67,7 @@ type GatherService struct {
 	gameCh chan<- core.GameEstablished
 }
 
-func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, n int, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
+func NewGatherService(h host.Host, topic *pubsub.Topic, game *game.GameService, ping *ping.PingService, n int, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
 	gs := &GatherService{
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
@@ -81,6 +83,7 @@ func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, 
 		meshCh: make(chan peerMeshMod),
 
 		ping:             ping,
+		game:             game,
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
 		localConnUpdates: make(chan heartbeat.PeerStatus),
 

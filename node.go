@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/kuredoro/snake_p2p/core"
+	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 )
 
@@ -34,6 +35,7 @@ type Node struct {
 	sub      *pubsub.Subscription
 	addrInfo *peer.AddrInfo
 	ping     *ping.PingService
+	game     *game.GameService
 
 	joinedGatherPoints map[peer.ID]*gather.JoinService
 	gatherService      *gather.GatherService
@@ -81,6 +83,7 @@ func New(ctx context.Context) (*Node, error) {
 		sub:                sub,
 		addrInfo:           HostAddrInfo(h),
 		ping:               ping.NewPingService(h),
+		game:               game.NewGameService(h),
 		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
 		GatherPoints:       make(chan *gather.GatherPointMessage, 32),
 		EstablishedGames:   make(chan core.GameEstablished),
@@ -122,7 +125,7 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 		return fmt.Errorf("join gather point: %v", err)
 	}
 
-	service, err := gather.NewJoinService(ctx, n.h, n.ping, pi.ID, n.gameProxyCh)
+	service, err := gather.NewJoinService(ctx, n.h, n.game, n.ping, pi.ID, n.gameProxyCh)
 	if err != nil {
 		return fmt.Errorf("create join service for peer %v: %v", pi.ID.ShortString(), err)
 	}
@@ -137,7 +140,7 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 }
 
 func (n *Node) CreateGatherPoint(playerCount int, TTL time.Duration) (err error) {
-	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.ping, playerCount, TTL, n.gameProxyCh)
+	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.game, n.ping, playerCount, TTL, n.gameProxyCh)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}
