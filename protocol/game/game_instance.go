@@ -49,6 +49,16 @@ func NewGameInstance() *GameInstance {
 	}
 }
 
+func (gi *GameInstance) GetPlayersIDs() []peer.ID {
+	gi.mu.Lock()
+	defer gi.mu.Unlock()
+	var playerIDs []peer.ID
+	for id, _ := range gi.streams {
+		playerIDs = append(playerIDs, id)
+	}
+	return playerIDs
+}
+
 func (gi *GameInstance) IncommingMoves() <-chan core.PlayerMoves {
 	return gi.recv
 }
