@@ -532,6 +532,7 @@ func (g *GameUI) RunGame(seed int64) {
 				g.handleKeyEvent(ev)
 
 				// TODO: spare me...
+				timer := time.NewTimer(20 * time.Millisecond)
 			getIncomming:
 				for {
 					select {
@@ -544,6 +545,19 @@ func (g *GameUI) RunGame(seed int64) {
 						log.Info().Msgf("Incoming message %#v", moves.Moves)
 						g.handleMoves(moves)
 						break getIncomming
+					case <-timer.C:
+						timer.Reset(20 * time.Millisecond)
+
+						if s.HasPendingEvent() {
+							// Poll event
+							ev := s.PollEvent()
+							// Process event
+							switch ev := ev.(type) {
+							case *tcell.EventKey:
+								if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
+									quit()
+								}
+							}
 						}
 					}
 				}
