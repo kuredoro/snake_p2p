@@ -173,6 +173,7 @@ func (g *GatherUI) eventLoop() {
 			g.gatherPoints[msg.ConnectTo.ID.Pretty()] = msg
 			// Add cell to gather points table
 			addRow(g.gameList, msg, len(g.gatherPoints) + 1, tcell.ColorWhite)
+			g.app.Draw()
 		case <-sigCh:
 			g.h.Close()
 			return
