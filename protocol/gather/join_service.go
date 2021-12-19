@@ -83,7 +83,8 @@ func (js *JoinService) run() {
 		case <-js.done:
 			err := js.stream.Close()
 			if err != nil {
-				fmt.Printf("ERR join service: close: %v\n", err)
+				js.log.Err(err).
+					Msg("Close join stream")
 			}
 
 			js.closeHeartbeats()
