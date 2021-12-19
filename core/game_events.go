@@ -37,7 +37,7 @@ type FoodEaten struct {
 }
 
 type PushSegment struct {
-	SnakeID int
+	SnakeID peer.ID
 	Pos     Coord // coordinates of a cell to add to a snake
 }
 
