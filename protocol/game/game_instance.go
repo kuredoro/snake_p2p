@@ -61,3 +61,11 @@ func (gi *GameInstance) Close() {
 		}
 	}
 }
+
+func (gi *GameInstance) PeerCount() int {
+	gi.mu.Lock()
+	n := len(gi.streams)
+	gi.mu.Unlock()
+
+	return n
+}
