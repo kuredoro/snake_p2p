@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
-	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
@@ -115,7 +114,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		g.flex.RemoveItem(g.newGame)
 	})
 
-	g.createBtn = tview.NewButton("Create Game").SetSelectedFunc(func() {
+	g.createBtn = tview.NewButton("Create GameUI").SetSelectedFunc(func() {
 		g.flex.RemoveItem(g.createBtn)
 		g.flex.AddItem(g.newGame, 0, 1, false)
 	})
@@ -138,31 +137,30 @@ func (g *GatherUI) eventLoop() {
 			log.Info().
 				Str("facilitator", info.Facilitator.Pretty()).
 				Int("peer_count", info.Game.PeerCount()).
-				Msg("Game established")
+				Msg("GameUI established")
+
 			gi := info.Game
-			gameCh := make(chan interface{}, 1)
-			game := GameInit(gameCh)
+			game := NewGame(gi)
 			game.RunGame()
 			gi.Run()
 
-			for i := 0; i < 3; i++ {
-				err := gi.SendMove(core.Up)
-				if err != nil {
-					log.Err(err).Msg("Test move")
-				}
-
-				log.Info().Msg("Sent move")
-
-				move := <-gi.IncommingMoves()
-				for peer, dir := range move.Moves {
-					log.Info().
-						Str("peer", peer.Pretty()).
-						Int("dir", int(dir)).
-						Msg("Player moved")
-				}
-			}
-
-			os.Exit(0)
+			//for i := 0; i < 3; i++ {
+			//	err := gi.SendMove(core.Up)
+			//	if err != nil {
+			//		log.Err(err).Msg("Test move")
+			//	}
+			//
+			//	log.Info().Msg("Sent move")
+			//
+			//	move := <-gi.IncommingMoves()
+			//	for peer, dir := range move.Moves {
+			//		log.Info().
+			//			Str("peer", peer.Pretty()).
+			//			Int("dir", int(dir)).
+			//			Msg("Player moved")
+			//	}
+			//}
+			g.app.Stop()
 		case msg := <-g.h.GatherPoints:
 			if _, exists := g.gatherPoints[msg.ConnectTo.ID.Pretty()]; exists {
 				continue
