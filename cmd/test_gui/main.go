@@ -18,6 +18,9 @@ func main() {
 		} else if event.Key() == tcell.KeyCtrlP {
 			//previousSlide()
 			return nil
+		} else if event.Key() == tcell.KeyEscape {
+			console.Cover()
+			return nil
 		}
 		return event
 	})
