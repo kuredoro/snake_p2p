@@ -136,8 +136,8 @@ func (n *Node) JoinGatherPoint(ctx context.Context, pi peer.AddrInfo) error {
 	return nil
 }
 
-func (n *Node) CreateGatherPoint(TTL time.Duration) (err error) {
-	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.ping, SendEvery, n.gameProxyCh)
+func (n *Node) CreateGatherPoint(playerCount int, TTL time.Duration) (err error) {
+	n.gatherService, err = gather.NewGatherService(n.h, n.topic, n.ping, playerCount, TTL, n.gameProxyCh)
 	if err != nil {
 		return fmt.Errorf("create gather point: %v", err)
 	}

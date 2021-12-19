@@ -48,7 +48,9 @@ type GatherService struct {
 	h       host.Host
 	streams map[peer.ID]network.Stream
 	topic   *pubsub.Topic
-	ttl     time.Duration
+
+	ttl          time.Duration
+	desiredCount int
 
 	mesh   peerMesh
 	meshCh chan peerMeshMod
@@ -63,7 +65,7 @@ type GatherService struct {
 	gameCh chan<- core.GameEstablished
 }
 
-func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
+func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, n int, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
 	gs := &GatherService{
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
@@ -71,7 +73,9 @@ func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, 
 		h:       h,
 		streams: make(map[peer.ID]network.Stream),
 		topic:   topic,
-		ttl:     TTL,
+
+		ttl:          TTL,
+		desiredCount: n,
 
 		mesh:   make(peerMesh),
 		meshCh: make(chan peerMeshMod),
@@ -80,7 +84,7 @@ func NewGatherService(h host.Host, topic *pubsub.Topic, ping *ping.PingService, 
 		conns:            make(map[peer.ID]*heartbeat.HeartbeatService),
 		localConnUpdates: make(chan heartbeat.PeerStatus),
 
-		beacon: NewGatherPointBeacon(topic, *HostAddrInfo(h), TTL),
+		beacon: NewGatherPointBeacon(topic, *HostAddrInfo(h), n, TTL),
 
 		gameCh: gameCh,
 	}
@@ -200,7 +204,7 @@ func (gs *GatherService) meshUpdateLoop() {
 				continue
 			}
 
-			clique := gs.mesh.FindClique(4, gs.h.ID())
+			clique := gs.mesh.FindClique(gs.desiredCount, gs.h.ID())
 			if clique == nil {
 				log.Debug().Msg("No cliques found")
 				continue

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	gatherFlag := flag.Bool("gather", false, "should this peer announce a gather point?")
+	gatherFlag := flag.Int("gather", 0, "create gather point for N players")
 	flag.Parse()
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -28,8 +28,8 @@ func main() {
 
 	log.Info().Msg("Node initialized")
 
-	if *gatherFlag {
-		err := h.CreateGatherPoint(time.Second)
+	if *gatherFlag != 0 {
+		err := h.CreateGatherPoint(*gatherFlag, time.Second)
 		if err != nil {
 			log.Err(err).Msg("New gather point")
 		}
