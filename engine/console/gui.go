@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
+	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
@@ -138,26 +139,28 @@ func (g *GatherUI) eventLoop() {
 				Str("facilitator", info.Facilitator.Pretty()).
 				Int("peer_count", info.Game.PeerCount()).
 				Msg("Game established")
+			gi := info.Game
+			gameCh := make(chan interface{}, 1)
+			game := GameInit(gameCh)
+			game.RunGame()
+			gi.Run()
 
-			//gi := info.Game
-			//gi.Run()
-			//
-			//for i := 0; i < 3; i++ {
-			//	err := gi.SendMove(core.Up)
-			//	if err != nil {
-			//		log.Err(err).Msg("Test move")
-			//	}
-			//
-			//	log.Info().Msg("Sent move")
-			//
-			//	move := <-gi.IncommingMoves()
-			//	for peer, dir := range move.Moves {
-			//		log.Info().
-			//			Str("peer", peer.Pretty()).
-			//			Int("dir", int(dir)).
-			//			Msg("Player moved")
-			//	}
-			//}
+			for i := 0; i < 3; i++ {
+				err := gi.SendMove(core.Up)
+				if err != nil {
+					log.Err(err).Msg("Test move")
+				}
+
+				log.Info().Msg("Sent move")
+
+				move := <-gi.IncommingMoves()
+				for peer, dir := range move.Moves {
+					log.Info().
+						Str("peer", peer.Pretty()).
+						Int("dir", int(dir)).
+						Msg("Player moved")
+				}
+			}
 
 			os.Exit(0)
 		case msg := <-g.h.GatherPoints:
