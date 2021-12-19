@@ -47,6 +47,7 @@ func main() {
 		case info := <-h.EstablishedGames:
 			log.Info().
 				Str("facilitator", info.Facilitator.Pretty()).
+				Int("peer_count", info.Game.PeerCount()).
 				Msg("Game established")
 			os.Exit(0)
 		case msg := <-h.GatherPoints:

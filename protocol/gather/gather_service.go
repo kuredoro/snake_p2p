@@ -307,9 +307,9 @@ func (gs *GatherService) monitorLoop() {
 
 				gs.peerDisconnected(peerStatus.Peer)
 				/*
-								   The main stream may still be alive
+									   The main stream may still be alive
 
-				                   UPD: decided that if ping dies, the whole thing dies...
+					                   UPD: decided that if ping dies, the whole thing dies...
 				*/
 
 				log.Info().
