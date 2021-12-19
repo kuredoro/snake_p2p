@@ -9,6 +9,9 @@ import (
 	"time"
 
 	snake "github.com/kuredoro/snake_p2p"
+	"github.com/kuredoro/snake_p2p/protocol/gather"
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -38,7 +41,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// Read from the channel and send
+	gatherPoints := make(map[peer.ID]*gather.GatherPointMessage)
 	for {
 		select {
 		case info := <-h.EstablishedGames:
@@ -47,8 +50,18 @@ func main() {
 				Msg("Game established")
 			os.Exit(0)
 		case msg := <-h.GatherPoints:
-			// fmt.Printf("GHR %v/%v %v\n", msg.CurrentPlayerCount, msg.DesiredPlayerCount, msg.ConnectTo)
-			err := h.JoinGatherPoint(context.TODO(), msg.ConnectTo)
+			if _, exists := gatherPoints[msg.ConnectTo.ID]; exists {
+				continue
+			}
+
+			log.Info().
+				Str("facilitator", msg.ConnectTo.ID.Pretty()).
+				Uint("desired_player_count", msg.DesiredPlayerCount).
+				Msg("Found new gather point")
+
+			gatherPoints[msg.ConnectTo.ID] = msg
+
+			err := h.JoinGatherPoint(ctx, msg.ConnectTo)
 			if err != nil {
 				log.Err(err).Msg("Join gather point")
 			}
