@@ -3,7 +3,6 @@ package game
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -18,7 +17,7 @@ type GameService struct {
 	instance *GameInstance
 }
 
-func NewGameService(h host.Host) (*GameService, error) {
+func NewGameService(h host.Host) *GameService {
 	game := &GameService{
 		h:        h,
 		instance: NewGameInstance(),
@@ -26,7 +25,7 @@ func NewGameService(h host.Host) (*GameService, error) {
 
 	h.SetStreamHandler(ID, game.GameHandler)
 
-	return game, nil
+	return game
 }
 
 func (g *GameService) Connect(ctx context.Context, p peer.ID) error {
