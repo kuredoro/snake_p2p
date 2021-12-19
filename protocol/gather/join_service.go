@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/kuredoro/snake_p2p/protocol/heartbeat"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -29,10 +28,10 @@ type JoinService struct {
 
 	log zerolog.Logger
 
-	gameCh chan<- core.GameEstablished
+	gameCh chan<- game.GameEstablished
 }
 
-func NewJoinService(ctx context.Context, h host.Host, game *game.GameService, ping *ping.PingService, pID peer.ID, gameCh chan<- core.GameEstablished) (*JoinService, error) {
+func NewJoinService(ctx context.Context, h host.Host, game *game.GameService, ping *ping.PingService, pID peer.ID, gameCh chan<- game.GameEstablished) (*JoinService, error) {
 	stream, err := h.NewStream(ctx, pID, ID)
 	if err != nil {
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
@@ -208,7 +207,7 @@ func (js *JoinService) run() {
 				js.log.Info().
 					Msg("Chosen for a game")
 
-				js.gameCh <- core.GameEstablished{
+				js.gameCh <- game.GameEstablished{
 					Facilitator: js.stream.Conn().RemotePeer(),
 					Game:        js.game.GetInstance(),
 				}

@@ -13,7 +13,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/rs/zerolog/log"
 
-	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 )
@@ -37,11 +36,10 @@ type Node struct {
 	ping     *ping.PingService
 	game     *game.GameService
 
-	joinedGatherPoints map[peer.ID]*gather.JoinService
-	gatherService      *gather.GatherService
-	GatherPoints       chan *gather.GatherPointMessage
-	EstablishedGames   chan core.GameEstablished
-	gameProxyCh        chan core.GameEstablished
+	joinedGatherPoints            map[peer.ID]*gather.JoinService
+	gatherService                 *gather.GatherService
+	GatherPoints                  chan *gather.GatherPointMessage
+	EstablishedGames, gameProxyCh chan game.GameEstablished
 }
 
 func New(ctx context.Context) (*Node, error) {
@@ -86,8 +84,8 @@ func New(ctx context.Context) (*Node, error) {
 		game:               game.NewGameService(h),
 		joinedGatherPoints: make(map[peer.ID]*gather.JoinService),
 		GatherPoints:       make(chan *gather.GatherPointMessage, 32),
-		EstablishedGames:   make(chan core.GameEstablished),
-		gameProxyCh:        make(chan core.GameEstablished),
+		EstablishedGames:   make(chan game.GameEstablished),
+		gameProxyCh:        make(chan game.GameEstablished),
 	}
 
 	go n.readLoop()
