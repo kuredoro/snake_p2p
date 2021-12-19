@@ -3,11 +3,15 @@ package console
 import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
+	snake "github.com/kuredoro/snake_p2p"
 	"github.com/rivo/tview"
+	"github.com/rs/zerolog/log"
 	"strconv"
+	"time"
 )
 
 type GatherUI struct {
+	h *snake.Node
 	app *tview.Application
 	flex *tview.Flex
 	myGatherPoint *tview.TextView
@@ -26,8 +30,9 @@ func checkNewGameField(textToCheck string, lastChar rune) bool {
 	return true
 }
 
-func NewGatherUI() *GatherUI {
+func NewGatherUI(h *snake.Node) *GatherUI {
 	g := &GatherUI{}
+	g.h = h
 	g.app = tview.NewApplication()
 	g.myGatherPoint = tview.NewTextView().
 						SetRegions(true).
@@ -69,6 +74,10 @@ func NewGatherUI() *GatherUI {
 			return
 		}
 		g.maxPlayers, _ = strconv.Atoi(g.newGame.GetText())
+		err := g.h.CreateGatherPoint(g.maxPlayers, time.Second)
+		if err != nil {
+			log.Err(err).Msg("New gather point")
+		}
 		g.myGatherPoint.Clear()
 		fmt.Fprintf(g.myGatherPoint, "Max # of players: %d", g.maxPlayers)
 		g.flex.RemoveItem(g.newGame)
