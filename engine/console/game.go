@@ -137,7 +137,7 @@ func drawFood(s tcell.Screen, food core.Coord, style tcell.Style, boundary Bound
 	if boundary.Contains(food) {
 		return fmt.Errorf("food coordinates are out of boundary")
 	}
-	s.SetContent(food.X, food.Y, '*', nil, style)
+	s.SetContent(food.X, food.Y, '#', nil, style)
 	return nil
 }
 
@@ -150,10 +150,10 @@ func drawGridCell(s tcell.Screen, cell core.Coord, style tcell.Style, boundary B
 }
 
 var defColors = map[tcell.Color]struct{}{
-	tcell.ColorReset:  {},
-	tcell.ColorWhite:  {},
-	tcell.ColorPurple: {},
-	tcell.ColorRed:    {},
+	tcell.ColorReset:     {},
+	tcell.ColorWhite:     {},
+	tcell.ColorPurple:    {},
+	tcell.ColorLightCyan: {},
 }
 
 func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
@@ -444,7 +444,7 @@ func (g *GameUI) RunGame(seed int64) {
 	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
 	blackBoxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
-	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorRed).Background(tcell.ColorPurple)
+	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorGreen).Background(tcell.ColorLightCyan)
 
 	// Initialize GameUI Screen
 	s, err := tcell.NewScreen()
