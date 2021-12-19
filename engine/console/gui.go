@@ -25,25 +25,21 @@ type GatherUI struct {
 	gatherPoints map[string]*gather.GatherPointMessage
 }
 
-func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int, joined bool) {
+func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int, color tcell.Color) {
 	ID := msg.ConnectTo.ID.Pretty()
 	tableCell := tview.NewTableCell(ID).
-		SetTextColor(tcell.ColorWhite).
+		SetTextColor(color).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
 	table.SetCell(row, 0, tableCell)
 	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
 	tableCell = tview.NewTableCell(maxPlayers).
-		SetTextColor(tcell.ColorWhite).
+		SetTextColor(color).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
 	table.SetCell(row, 1, tableCell)
-	r := ""
-	if joined {
-		r = string(tcell.RuneBullet)
-	}
-	tableCell = tview.NewTableCell(r).
-		SetTextColor(tcell.ColorWhite).
+	tableCell = tview.NewTableCell("").
+		SetTextColor(color).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
 	table.SetCell(row, 2, tableCell)
@@ -96,6 +92,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		//cell.Text = "✔️"
 		g.gameList.GetCell(row, 2).SetText("〇")
 	})
+
 	g.newGame = tview.NewInputField().
 					SetLabel("Enter the maximum number of players ").
 					SetFieldWidth(0).
@@ -175,7 +172,7 @@ func (g *GatherUI) eventLoop() {
 
 			g.gatherPoints[msg.ConnectTo.ID.Pretty()] = msg
 			// Add cell to gather points table
-			addRow(g.gameList, msg, len(g.gatherPoints) + 1, false)
+			addRow(g.gameList, msg, len(g.gatherPoints) + 1, tcell.ColorWhite)
 		case <-sigCh:
 			g.h.Close()
 			return
