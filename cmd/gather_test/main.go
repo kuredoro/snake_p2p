@@ -9,6 +9,7 @@ import (
 	"time"
 
 	snake "github.com/kuredoro/snake_p2p"
+	"github.com/kuredoro/snake_p2p/core"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -49,6 +50,22 @@ func main() {
 				Str("facilitator", info.Facilitator.Pretty()).
 				Int("peer_count", info.Game.PeerCount()).
 				Msg("Game established")
+
+			gi := info.Game
+			gi.Run()
+			err := gi.SendMove(core.Up)
+			if err != nil {
+				log.Err(err).Msg("Test move")
+			}
+
+			for i := 0; i < gi.PeerCount(); i++ {
+				// Demonstration purpose only
+				move := <-gi.IncommingMoves()
+				log.Info().
+					Int("dir", int(move.Moves[0])).
+					Msg("Received move")
+			}
+
 			os.Exit(0)
 		case msg := <-h.GatherPoints:
 			if _, exists := gatherPoints[msg.ConnectTo.ID]; exists {
