@@ -53,17 +53,17 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(1, 1, tableCell)
+	table.SetCell(1, 0, tableCell)
 	tableCell = tview.NewTableCell("Players needed").
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(1, 2, tableCell)
+	table.SetCell(1, 1, tableCell)
 	tableCell = tview.NewTableCell("Joined").
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(1, 3, tableCell)
+	table.SetCell(1, 2, tableCell)
 	g.gameList = table
 
 	g.newGame = tview.NewInputField().
@@ -108,18 +108,18 @@ func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int) {
 		SetTextColor(tcell.ColorWhite).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(row, 1, tableCell)
+	table.SetCell(row, 0, tableCell)
 	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
 	tableCell = tview.NewTableCell(maxPlayers).
 		SetTextColor(tcell.ColorWhite).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(row, 2, tableCell)
+	table.SetCell(row, 1, tableCell)
 	tableCell = tview.NewTableCell("").
 		SetTextColor(tcell.ColorWhite).
 		SetAlign(tview.AlignCenter).
 		SetExpansion(1)
-	table.SetCell(row, 3, tableCell)
+	table.SetCell(row, 2, tableCell)
 }
 
 func (g *GatherUI) eventLoop() {
