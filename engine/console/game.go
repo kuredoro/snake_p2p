@@ -31,8 +31,9 @@ type GameUI struct {
 	moveNum		int
 	AliveSnakes int
 	Over        bool
-	Successful bool
+	Successful  bool
 	WinnerID    peer.ID
+	r			*rand.Rand
 }
 
 // add food every N moves
@@ -261,7 +262,12 @@ func (g *GameUI) newFood() {
 	x1, y1 := g.bound.TopLeft.X, g.bound.TopLeft.Y
 	x2, y2 := g.bound.BottomRight.X, g.bound.BottomRight.Y
 	c := len(g.Snakes) * (g.moveNum / N) + 2
-	cell := rand.Intn((x2-x1-c)*(y2-y1-c))
+	var cell int
+	if y2-y1-c <= 0 || x2-x1-c <= 0 {
+		cell = 5
+	} else {
+		cell = g.r.Intn((x2-x1-c)*(y2-y1-c))
+	}
 	for row := x1 + 1; row < x2; row++ {
 		for col := y1 + 1; col < y2; col++ {
 			flag := true
@@ -328,9 +334,7 @@ func (g *GameUI) handleMoves(moves core.PlayerMoves) {
 			panic("the value of direction is unknown")
 		}
 	}
-	log.Info().Msgf("New heads before: %#v", newHeadCoord)
 	g.handleOutOfBoundary(&newHeadCoord)
-	log.Info().Msgf("New heads after: %#v", newHeadCoord)
 	g.markDead(newHeadCoord)
 	if g.isOver() {
 		return
@@ -409,10 +413,11 @@ func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
 
 func (g *GameUI) RunGame(seed int64) {
 	rand.Seed(seed)
+	g.r = rand.New(rand.NewSource(seed))
 	// Generate snakes
 	for _, id := range g.gi.PlayersIDs(){
-		start := core.Coord{X: rand.Intn(g.bound.BottomRight.X - g.bound.TopLeft.X - 1) + 1,
-			Y: rand.Intn(g.bound.BottomRight.Y - g.bound.TopLeft.Y - 1) + 1}
+		start := core.Coord{X: g.r.Intn(g.bound.BottomRight.X - g.bound.TopLeft.X - 1) + 1,
+							Y: g.r.Intn(g.bound.BottomRight.Y - g.bound.TopLeft.Y - 1) + 1}
 		//log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
 		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
 	}
