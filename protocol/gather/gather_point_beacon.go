@@ -13,16 +13,20 @@ import (
 type GatherPointBeacon struct {
 	done chan struct{}
 
-	ttl      time.Duration
+	ttl          time.Duration
+	desiredCount int
+
 	selfInfo peer.AddrInfo
 	topic    *pubsub.Topic
 }
 
-func NewGatherPointBeacon(topic *pubsub.Topic, self peer.AddrInfo, TTL time.Duration) *GatherPointBeacon {
+func NewGatherPointBeacon(topic *pubsub.Topic, self peer.AddrInfo, n int, TTL time.Duration) *GatherPointBeacon {
 	b := &GatherPointBeacon{
 		done: make(chan struct{}),
 
-		ttl:      TTL,
+		ttl:          TTL,
+		desiredCount: n,
+
 		selfInfo: self,
 		topic:    topic,
 	}
@@ -68,7 +72,7 @@ func (b *GatherPointBeacon) publish() error {
 	msg := GatherPointMessage{
 		ConnectTo:          b.selfInfo,
 		TTL:                b.ttl,
-		DesiredPlayerCount: 3,
+		DesiredPlayerCount: uint(b.desiredCount),
 		CurrentPlayerCount: 0,
 	}
 
