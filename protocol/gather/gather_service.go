@@ -23,19 +23,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type PeerError struct {
-	Peer peer.ID
-	Err  error
-}
-
-func (e *PeerError) Error() string {
-	return fmt.Sprintf("peer %s: %v", e.Peer.Pretty(), e.Err)
-}
-
-func (e *PeerError) Unwrap() error {
-	return e.Err
-}
-
 func HostAddrInfo(h host.Host) *peer.AddrInfo {
 	return &peer.AddrInfo{
 		ID:    h.ID(),
@@ -65,10 +52,10 @@ type GatherService struct {
 	// TODO: move beacon to snake.Node
 	beacon *GatherPointBeacon
 
-	gameCh chan<- core.GameEstablished
+	gameCh chan<- game.GameEstablished
 }
 
-func NewGatherService(h host.Host, topic *pubsub.Topic, game *game.GameService, ping *ping.PingService, n int, TTL time.Duration, gameCh chan<- core.GameEstablished) (*GatherService, error) {
+func NewGatherService(h host.Host, topic *pubsub.Topic, game *game.GameService, ping *ping.PingService, n int, TTL time.Duration, gameCh chan<- game.GameEstablished) (*GatherService, error) {
 	gs := &GatherService{
 		monitorDone:    make(chan struct{}),
 		meshUpdateDone: make(chan struct{}),
@@ -258,7 +245,7 @@ func (gs *GatherService) meshUpdateLoop() {
 				delete(gs.streams, id)
 			}
 
-			gs.gameCh <- core.GameEstablished{
+			gs.gameCh <- game.GameEstablished{
 				Facilitator: gs.h.ID(),
 				Game:        gs.game.GetInstance(),
 			}
@@ -293,7 +280,7 @@ func (gs *GatherService) monitorLoop() {
 				if err != nil {
 					merr := err.(*multierror.Error)
 					for _, err := range merr.Errors {
-						peerErr := err.(*PeerError)
+						peerErr := err.(*core.PeerError)
 						gs.peerDisconnected(peerErr.Peer)
 						log.Err(peerErr.Err).
 							Str("seeker", peerErr.Peer.Pretty()).
@@ -394,7 +381,7 @@ func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrI
 
 	raw, err := json.Marshal(&msg)
 	if err != nil {
-		return &PeerError{
+		return &core.PeerError{
 			Peer: pi.ID,
 			Err:  fmt.Errorf("marshal: %v", err),
 		}
@@ -404,7 +391,7 @@ func (gs *GatherService) askPeerToConnectTo(stream network.Stream, pi peer.AddrI
 
 	_, err = stream.Write(raw)
 	if err != nil {
-		return &PeerError{
+		return &core.PeerError{
 			Peer: pi.ID,
 			Err:  fmt.Errorf("send: %v", err),
 		}

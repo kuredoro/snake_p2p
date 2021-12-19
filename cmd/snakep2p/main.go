@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/kuredoro/snake_p2p/core"
 	"math/rand"
 	"time"
+
+	"github.com/kuredoro/snake_p2p/core"
 
 	"github.com/kuredoro/snake_p2p/engine/console"
 )

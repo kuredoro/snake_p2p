@@ -9,6 +9,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+
+type GameEstablished struct {
+	Facilitator peer.ID
+	Game        *GameInstance
+}
+
 type GameInstance struct {
 	streams map[peer.ID]network.Stream
 
