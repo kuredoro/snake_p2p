@@ -6,6 +6,10 @@ type Coord struct {
 	X, Y int
 }
 
+func EqualCoord(a, b Coord) bool {
+	return a.X == b.X && a.Y == b.Y
+}
+
 type PlayerStarts struct {
 	Players map[peer.ID]Coord // map from player's SnakeID to its start coordinates
 }

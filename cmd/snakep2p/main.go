@@ -7,7 +7,7 @@ import (
 	"github.com/kuredoro/snake_p2p/engine/console"
 )
 
-func eventsSequence(game *console.Game) {
+func eventsSequence(game *console.GameUI) {
 	// Add events to channel
 	//game.Ch <- core.PlayerStarts{Players: map[int]core.Coord{
 	//	0: {X: 4, Y: 2},
@@ -71,8 +71,8 @@ func eventsSequence(game *console.Game) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	// Create Game
-	game := console.GameInit(make(chan interface{}, 1))
-	go eventsSequence(game)
-	game.RunGame()
+	// Create GameUI
+	//game := console.GameInit(make(chan interface{}, 1))
+	//go eventsSequence(game)
+	//game.RunGame()
 }

@@ -114,7 +114,7 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		g.flex.RemoveItem(g.newGame)
 	})
 
-	g.createBtn = tview.NewButton("Create GameUI").SetSelectedFunc(func() {
+	g.createBtn = tview.NewButton("Create gather point").SetSelectedFunc(func() {
 		g.flex.RemoveItem(g.createBtn)
 		g.flex.AddItem(g.newGame, 0, 1, false)
 	})
@@ -138,12 +138,13 @@ func (g *GatherUI) eventLoop() {
 				Str("facilitator", info.Facilitator.Pretty()).
 				Int("peer_count", info.Game.PeerCount()).
 				Msg("GameUI established")
-
 			gi := info.Game
 			game := NewGame(gi)
-			game.RunGame()
-			gi.Run()
-
+			g.app.Suspend(func() {
+				seed := gi.Run()
+				game.RunGame(seed)
+				gi.Close()
+			})
 			//for i := 0; i < 3; i++ {
 			//	err := gi.SendMove(core.Up)
 			//	if err != nil {
@@ -160,7 +161,6 @@ func (g *GatherUI) eventLoop() {
 			//			Msg("Player moved")
 			//	}
 			//}
-			g.app.Stop()
 		case msg := <-g.h.GatherPoints:
 			if _, exists := g.gatherPoints[msg.ConnectTo.ID.Pretty()]; exists {
 				continue

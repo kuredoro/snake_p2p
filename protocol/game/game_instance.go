@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -33,7 +34,6 @@ type GameInstance struct {
 
 	recv       chan core.PlayerMoves
 	moves      chan playerMove
-	myLastMove core.Direction
 
 	mu sync.Mutex
 }
@@ -49,14 +49,24 @@ func NewGameInstance() *GameInstance {
 	}
 }
 
-func (gi *GameInstance) GetPlayersIDs() []peer.ID {
+func (gi *GameInstance) PlayersIDs() []peer.ID {
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
 	var playerIDs []peer.ID
 	for id, _ := range gi.streams {
 		playerIDs = append(playerIDs, id)
 	}
+	playerIDs = append(playerIDs, gi.selfID)
+	sort.Slice(playerIDs, func(i, j int) bool {
+		return playerIDs[i] < playerIDs[j]
+	})
 	return playerIDs
+}
+
+func (gi *GameInstance) SelfID() peer.ID {
+	gi.mu.Lock()
+	defer gi.mu.Unlock()
+	return gi.selfID
 }
 
 func (gi *GameInstance) IncommingMoves() <-chan core.PlayerMoves {
@@ -205,8 +215,6 @@ func (gi *GameInstance) SendMove(move core.Direction) (err error) {
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
 
-	gi.myLastMove = move
-
 	// TODO: have a sane protocol, not just numbers flying around...
 	msg := strconv.Itoa(int(move)) + "\n"
 
@@ -218,6 +226,11 @@ func (gi *GameInstance) SendMove(move core.Direction) (err error) {
 				Err:  err,
 			})
 		}
+	}
+
+	gi.moves <- playerMove{
+		ID: gi.selfID,
+		Dir: move,
 	}
 
 	return
@@ -303,8 +316,7 @@ func (gi *GameInstance) syncLoop() {
 
 		log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
 
-		if len(msg.Moves) == gi.PeerCount() {
-			msg.Moves[gi.selfID] = gi.myLastMove
+		if len(msg.Moves) == gi.PeerCount() + 1 {
 			gi.recv <- msg
 
 			msg = core.PlayerMoves{
