@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"log"
 	"math/rand"
 	"os"
@@ -22,7 +23,7 @@ type Snake struct {
 
 type Game struct {
 	Ch          chan interface{}
-	Snakes      map[int]*Snake
+	Snakes      map[peer.ID]*Snake
 	Food        map[int]core.Coord
 	AliveSnakes int
 	Over        bool
@@ -33,7 +34,7 @@ func GameInit(ch chan interface{}) *Game {
 	game := &Game{
 		Ch:          ch,
 		Food:        make(map[int]core.Coord),
-		Snakes:      make(map[int]*Snake),
+		Snakes:      make(map[peer.ID]*Snake),
 		AliveSnakes: 0,
 		Over:        false,
 		WinnerID:    -1,
@@ -105,12 +106,12 @@ func drawBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	// drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-func drawSnake(s tcell.Screen, ID int, snake *Snake, boundary Boundary) error {
+func drawSnake(s tcell.Screen, ID peer.ID, snake *Snake, boundary Boundary) error {
 	if boundary.Contains(snake.Head) {
 		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
-	id := []rune(strconv.Itoa(ID))
-	s.SetContent(snake.Head.X, snake.Head.Y, id[0], nil, snake.Style)
+	//id := []rune(strconv.Itoa(ID))
+	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneDiamond, nil, snake.Style)
 	for _, point := range snake.Body {
 		if boundary.Contains(point) {
 			return fmt.Errorf("snakep2p's body coordinates are out of boundary")
@@ -167,7 +168,7 @@ func (game *Game) handleGameEvent(event interface{}) {
 		}
 	case core.NewFood:
 		game.Food[event.FoodID] = event.Pos
-	case core.PlayerMove:
+	case core.PlayerMoves:
 		for id, dir := range event.Moves {
 			prevHead := game.Snakes[id].Head
 			// move snake's head
