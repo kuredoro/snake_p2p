@@ -119,17 +119,17 @@ func drawBox(s tcell.Screen, boundary Boundary, style tcell.Style) {
 	// drawText(s, x1+1, y1+1, x2-1, y2-1, style, text)
 }
 
-func drawSnake(s tcell.Screen, ID peer.ID, snake *Snake, boundary Boundary) error {
+func drawSnake(s tcell.Screen, ID peer.ID, snake *Snake, boundary Boundary, style tcell.Style) error {
 	if boundary.Contains(snake.Head) {
 		return fmt.Errorf("snakep2p's head coordinates (%d, %d) are out of boundary", snake.Head.X, snake.Head.Y)
 	}
 	// id := []rune(strconv.Itoa(ID))
-	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneDiamond, nil, snake.Style)
+	s.SetContent(snake.Head.X, snake.Head.Y, tcell.RuneDiamond, nil, style)
 	for _, point := range snake.Body {
 		if boundary.Contains(point) {
 			return fmt.Errorf("snakep2p's body coordinates are out of boundary")
 		}
-		s.SetContent(point.X, point.Y, tcell.RuneBlock, nil, snake.Style)
+		s.SetContent(point.X, point.Y, tcell.RuneBlock, nil, style)
 	}
 	return nil
 }
@@ -155,19 +155,22 @@ var defColors = map[tcell.Color]struct{}{
 	tcell.ColorWhite:     {},
 	tcell.ColorPurple:    {},
 	tcell.ColorLightCyan: {},
+	tcell.ColorOlive:	  {},
+	tcell.ColorSilver:	  {},
 }
 
-func getRandColor(defColors map[tcell.Color]struct{}) tcell.Color {
+func getRandColor(defColors *map[tcell.Color]struct{}) tcell.Color {
 	color := tcell.PaletteColor(rand.Intn(256))
-	_, ok := defColors[color]
+	_, ok := (*defColors)[color]
 	for ok == true {
 		color = tcell.PaletteColor(rand.Intn(256))
-		_, ok = defColors[color]
+		_, ok = (*defColors)[color]
 	}
+	(*defColors)[color] = struct{}{}
 	return color
 }
 
-func genSnakeStyle(defColors map[tcell.Color]struct{}) tcell.Style {
+func genSnakeStyle(defColors *map[tcell.Color]struct{}) tcell.Style {
 	style := tcell.StyleDefault.Foreground(getRandColor(defColors)).Background(getRandColor(defColors))
 	return style
 }
@@ -437,8 +440,7 @@ func (g *GameUI) RunGame(seed int64) {
 				break
 			}
 		}
-		// log.Debug().Msg("\nSnakeIDs: " + id.Pretty())
-		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(defColors)}
+		g.Snakes[id] = &Snake{Alive: true, Head: start, Style: genSnakeStyle(&defColors)}
 	}
 	g.AliveSnakes = len(g.Snakes)
 	// Define GameUI styles
@@ -446,7 +448,7 @@ func (g *GameUI) RunGame(seed int64) {
 	boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
 	blackBoxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 	foodStyle := tcell.StyleDefault.Foreground(tcell.ColorGreen).Background(tcell.ColorLightCyan)
-
+	snakeStyle := tcell.StyleDefault.Foreground(tcell.ColorOlive).Background(tcell.ColorSilver)
 	// Initialize GameUI Screen
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -503,7 +505,7 @@ func (g *GameUI) RunGame(seed int64) {
 		x2 := (g.bound.BottomRight.X - g.bound.TopLeft.X + width) / 2
 		y2 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y + height) / 2
 		drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
-		drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "GameUI Over")
+		drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "Game Over")
 		if g.Successful {
 			text := ""
 			if finished && g.WinnerID == g.gi.SelfID() {
@@ -525,7 +527,14 @@ func (g *GameUI) RunGame(seed int64) {
 				if !snake.Alive {
 					continue
 				}
-				err := drawSnake(s, id, snake, g.bound)
+				var style tcell.Style
+				if g.gi.SelfID() == id {
+					style = snakeStyle
+				} else {
+					style = snake.Style
+				}
+
+				err := drawSnake(s, id, snake, g.bound, style)
 				if err != nil {
 					s.Fini()
 					log.Err(err)
