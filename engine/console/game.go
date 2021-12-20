@@ -183,19 +183,26 @@ func (g *GameUI) markDead(newHeadCoord map[peer.ID]core.Coord) {
 			if core.EqualCoord(coord1, coord2) {
 				g.Snakes[id1].Alive = false
 				g.Snakes[id2].Alive = false
+				g.gi.RemovePeer(id1)
+				g.gi.RemovePeer(id2)
 				g.AliveSnakes -= 2
 			}
 		}
 		// head into body
 		for _, snake := range g.Snakes {
+			if !snake.Alive {
+				continue
+			}
 			if core.EqualCoord(snake.Head, coord1) {
 				g.Snakes[id1].Alive = false
+				g.gi.RemovePeer(id1)
 				g.AliveSnakes--
 				break
 			}
 			for _, b := range snake.Body {
 				if core.EqualCoord(b, coord1) {
 					g.Snakes[id1].Alive = false
+					g.gi.RemovePeer(id1)
 					g.AliveSnakes--
 					break
 				}
@@ -243,6 +250,9 @@ func (g *GameUI) eatFood(newHeadCoord map[peer.ID]core.Coord) {
 
 func (g *GameUI) moveSnakes(newHeadCoord map[peer.ID]core.Coord) {
 	for id, coord := range newHeadCoord {
+		if g.Snakes[id].Alive == false {
+			continue
+		}
 		// move head
 		prevHead := g.Snakes[id].Head
 		g.Snakes[id].Head = coord
@@ -479,7 +489,7 @@ func (g *GameUI) RunGame(seed int64) {
 				width = len(g.WinnerID.Pretty()) + 10
 			} else {
 				height = 2
-				width = 12
+				width = 15
 			}
 			x1 := (g.bound.BottomRight.X - g.bound.TopLeft.X - width) / 2
 			y1 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y - height) / 2
