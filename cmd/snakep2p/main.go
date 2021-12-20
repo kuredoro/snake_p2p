@@ -1,78 +1,50 @@
 package main
 
 import (
-	"math/rand"
-	"time"
-
+	"flag"
+	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/engine/console"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/net/context"
+	"os"
+
+	//"github.com/rivo/tview"
 )
 
-func eventsSequence(game *console.GameUI) {
-	// Add events to channel
-	//game.Ch <- core.PlayerStarts{Players: map[int]core.Coord{
-	//	0: {X: 4, Y: 2},
-	//	1: {X: 7, Y: 5},
-	//	2: {X: 10, Y: 2},
-	//	3: {X: 10, Y: 6},
-	//}}
-	//game.Ch <- core.NewFood{FoodID: 0, Pos: core.Coord{X: 5, Y: 2}}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{
-	//	0: core.Right,
-	//	1: core.Left,
-	//	2: core.Down,
-	//	3: core.Up,
-	//}}
-	//game.Ch <- core.FoodEaten{FoodID: 0}
-	//game.Ch <- core.PushSegment{SnakeID: 0, Pos: core.Coord{X: 4, Y: 2}}
-	//game.Ch <- core.NewFood{FoodID: 1, Pos: core.Coord{X: 5, Y: 3}}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.NewFood{FoodID: 2, Pos: core.Coord{X: 10, Y: 4}}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{
-	//	0: core.Down,
-	//	1: core.Up,
-	//	2: core.Down,
-	//	3: core.Right,
-	//}}
-	//game.Ch <- core.FoodEaten{FoodID: 1}
-	//game.Ch <- core.FoodEaten{FoodID: 2}
-	//game.Ch <- core.PushSegment{SnakeID: 0, Pos: core.Coord{X: 4, Y: 2}}
-	//game.Ch <- core.PushSegment{SnakeID: 2, Pos: core.Coord{X: 10, Y: 3}}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{
-	//	0: core.Down,
-	//	1: core.Right,
-	//	2: core.Down,
-	//	3: core.Left,
-	//}}
-	//game.Ch <- core.PlayerDied{SnakeID: 2}
-	//game.Ch <- core.PlayerDied{SnakeID: 3}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{
-	//	0: core.Down,
-	//	1: core.Left,
-	//}}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.PlayerMove{Moves: map[int]core.Direction{
-	//	0: core.Down,
-	//	1: core.Left,
-	//}}
-	//game.Ch <- core.PlayerDied{SnakeID: 1}
-	//game.Ch <- core.Tick{}
-	//time.Sleep(2 * time.Second)
-	//game.Ch <- core.GameOver{Successful: true, Winner: 0}
-}
-
 func main() {
-	rand.Seed(time.Now().UnixNano())
-	// Create GameUI
-	//game := console.GameInit(make(chan interface{}, 1))
-	//go eventsSequence(game)
-	//game.RunGame()
+	//gatherFlag := flag.Int("gather", 0, "create gather point for N players")
+	logNameFlag := flag.String("logname", "ui_logs.txt", "Name of log file")
+	flag.Parse()
+
+	f, _ := os.Create(*logNameFlag)
+	log.Logger = log.Output(f)
+	ctx := context.Background()
+	h, err := snake.New(ctx)
+	if err != nil {
+		log.Err(err).Msg("New node")
+		os.Exit(1)
+	}
+
+	log.Info().Msg("Node initialized")
+
+	g := console.NewGatherUI(h)
+	// Shortcuts to navigate the slides.
+	//console.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	//	if event.Key() == tcell.KeyCtrlN {
+	//		//nextSlide()
+	//		return nil
+	//	} else if event.Key() == tcell.KeyCtrlP {
+	//		//previousSlide()
+	//		return nil
+	//	} else if event.Key() == tcell.KeyEscape {
+	//		console.Cover()
+	//		return nil
+	//	}
+	//	return event
+	//})
+
+	// Start the application.
+	if err := g.Run(); err != nil {
+		panic("GameUI Run finished with error")
+	}
 }
