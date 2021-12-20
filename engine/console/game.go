@@ -268,7 +268,7 @@ func (g *GameUI) newFood() {
 	for _, snake := range g.Snakes {
 		filled += len(snake.Body) + 1
 	}
-	cell := g.r.Intn((x2 - x1 - 1) * (y2 - y1 - 1) - filled)
+	cell := g.r.Intn((x2-x1-1)*(y2-y1-1) - filled)
 	for row := x1 + 1; row < x2; row++ {
 		for col := y1 + 1; col < y2; col++ {
 			flag := true
@@ -358,17 +358,18 @@ func (g *GameUI) checkMove(move core.Coord) bool {
 	return true
 }
 
-func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
+func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) bool {
 	id := g.gi.SelfID()
 	if ev.Key() == tcell.KeyUp {
 		snake := g.Snakes[id]
 		move := g.goodCoord(core.Coord{X: snake.Head.X, Y: snake.Head.Y - 1})
 		if !g.checkMove(move) {
-			return
+			return false
 		}
 		err := g.gi.SendMove(core.Up)
 		if err != nil {
 			log.Err(err).Int("move", int(core.Up)).Msg("Key pressed")
+			return false
 		}
 
 		log.Info().Int("move", int(core.Up)).Msg("Key pressed")
@@ -377,11 +378,12 @@ func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
 	if ev.Key() == tcell.KeyDown {
 		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X, Y: g.Snakes[id].Head.Y + 1})
 		if !g.checkMove(move) {
-			return
+			return false
 		}
 		err := g.gi.SendMove(core.Down)
 		if err != nil {
 			log.Err(err).Int("move", int(core.Down)).Msg("Key pressed")
+			return false
 		}
 
 		log.Info().Int("move", int(core.Down)).Msg("Key pressed")
@@ -390,11 +392,12 @@ func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
 	if ev.Key() == tcell.KeyRight {
 		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X + 1, Y: g.Snakes[id].Head.Y})
 		if !g.checkMove(move) {
-			return
+			return false
 		}
 		err := g.gi.SendMove(core.Right)
 		if err != nil {
 			log.Err(err).Int("move", int(core.Right)).Msg("Key pressed")
+			return false
 		}
 		log.Info().Int("move", int(core.Right)).Msg("Key pressed")
 
@@ -402,15 +405,17 @@ func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) {
 	if ev.Key() == tcell.KeyLeft {
 		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X - 1, Y: g.Snakes[id].Head.Y})
 		if !g.checkMove(move) {
-			return
+			return false
 		}
 		err := g.gi.SendMove(core.Left)
 		if err != nil {
 			log.Err(err).Int("move", int(core.Left)).Msg("Key pressed")
+			return false
 		}
 		log.Info().Int("move", int(core.Left)).Msg("Key pressed")
-
 	}
+
+	return true
 }
 
 func (g *GameUI) RunGame(seed int64) {
@@ -527,7 +532,11 @@ func (g *GameUI) RunGame(seed int64) {
 				if g.Over && ev.Key() == tcell.KeyEnter {
 					quit()
 				}
-				g.handleKeyEvent(ev)
+
+				moved := g.handleKeyEvent(ev)
+				if !moved {
+					continue
+				}
 
 				// TODO: spare me...
 				timer := time.NewTimer(20 * time.Millisecond)
