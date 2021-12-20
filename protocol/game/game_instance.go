@@ -49,7 +49,7 @@ func NewGameInstance() *GameInstance {
 		// FIXME: if SendEvent and we form the move, then we need the user to
 		// receive the PlayerMoves event
 		// but if it waits send event to finishi... it just deadlocks.
-		moves: make(chan playerMove, 1),
+		moves: make(chan playerMove, 32),
 	}
 }
 
