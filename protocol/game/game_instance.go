@@ -32,8 +32,8 @@ type GameInstance struct {
 	selfID     peer.ID
 	Seed       int64
 
-	recv       chan core.PlayerMoves
-	moves      chan playerMove
+	recv  chan core.PlayerMoves
+	moves chan playerMove
 
 	mu sync.Mutex
 }
@@ -44,8 +44,12 @@ func NewGameInstance() *GameInstance {
 		finishedCh: make(chan struct{}),
 		streams:    make(map[peer.ID]network.Stream),
 
-		recv:  make(chan core.PlayerMoves),
-		moves: make(chan playerMove),
+		recv: make(chan core.PlayerMoves),
+
+		// FIXME: if SendEvent and we form the move, then we need the user to
+		// receive the PlayerMoves event
+		// but if it waits send event to finishi... it just deadlocks.
+		moves: make(chan playerMove, 1),
 	}
 }
 
@@ -53,7 +57,7 @@ func (gi *GameInstance) PlayersIDs() []peer.ID {
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
 	var playerIDs []peer.ID
-	for id, _ := range gi.streams {
+	for id := range gi.streams {
 		playerIDs = append(playerIDs, id)
 	}
 	playerIDs = append(playerIDs, gi.selfID)
@@ -229,7 +233,7 @@ func (gi *GameInstance) SendMove(move core.Direction) (err error) {
 	}
 
 	gi.moves <- playerMove{
-		ID: gi.selfID,
+		ID:  gi.selfID,
 		Dir: move,
 	}
 
@@ -316,7 +320,7 @@ func (gi *GameInstance) syncLoop() {
 
 		log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
 
-		if len(msg.Moves) == gi.PeerCount() + 1 {
+		if len(msg.Moves) == gi.PeerCount()+1 {
 			gi.recv <- msg
 
 			msg = core.PlayerMoves{
