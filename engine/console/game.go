@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -412,6 +413,16 @@ func (g *GameUI) handleMove(dir core.Direction) bool {
 	err := g.gi.SendMove(dir)
 	if err != nil {
 		log.Err(err).Int("move", int(dir)).Msg("Key pressed")
+
+        merr := err.(*multierror.Error)
+        for _, err := range merr.Errors {
+            perr := err.(*core.PeerError)
+
+            log.Err(perr).Msg("purged")
+            g.Snakes[perr.Peer].Alive = false
+            g.gi.RemovePeer(perr.Peer)
+            g.AliveSnakes--
+        }
 		return false
 	}
 
@@ -571,14 +582,21 @@ func (g *GameUI) RunGame(seed int64) {
 				timer.Reset(moveRate)
 				continue
 			}
-		case moves, ok := <-g.gi.IncommingMoves():
-			if !ok {
-				quit()
-			}
-			log.Info().Msgf("Incoming message %#v", moves.Moves)
+		case e, ok := <-g.gi.IncommingMoves():
+            switch e := e.(type) {
+            case core.PlayerMoves:
+                if !ok {
+                    quit()
+                }
+                log.Info().Msgf("Incoming message %#v", e.Moves)
 
-			g.handleMoves(moves)
-			timer.Reset(moveRate)
+                g.handleMoves(e)
+                timer.Reset(moveRate)
+            case peer.ID:
+                g.Snakes[e].Alive = false
+                g.gi.RemovePeer(e)
+                g.AliveSnakes--
+            }
 		case ev := <-eventCh:
 			switch ev := ev.(type) {
 			case *tcell.EventResize:

@@ -2,7 +2,6 @@ package game
 
 import (
 	"bufio"
-	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -25,6 +24,8 @@ type playerMove struct {
 	Dir core.Direction
 }
 
+type GameInstanceEvent interface{}
+
 type GameInstance struct {
 	done       chan struct{}
 	finishedCh chan struct{}
@@ -32,7 +33,7 @@ type GameInstance struct {
 	selfID     peer.ID
 	Seed       int64
 
-	recv  chan core.PlayerMoves
+	recv  chan interface{}
 	moves chan playerMove
 
 	mu sync.Mutex
@@ -44,7 +45,7 @@ func NewGameInstance() *GameInstance {
 		finishedCh: make(chan struct{}),
 		streams:    make(map[peer.ID]network.Stream),
 
-		recv: make(chan core.PlayerMoves),
+		recv: make(chan interface{}),
 
 		// FIXME: if SendEvent and we form the move, then we need the user to
 		// receive the PlayerMoves event
@@ -73,7 +74,7 @@ func (gi *GameInstance) SelfID() peer.ID {
 	return gi.selfID
 }
 
-func (gi *GameInstance) IncommingMoves() <-chan core.PlayerMoves {
+func (gi *GameInstance) IncommingMoves() <-chan interface{} {
 	return gi.recv
 }
 
@@ -96,7 +97,7 @@ func (gi *GameInstance) RemovePeer(p peer.ID) error {
 
 	err := s.Close()
 	if err != nil {
-		return fmt.Errorf("close game stream: %v", err)
+        log.Err(err).Msg("Remove peer and close connection")
 	}
 
 	delete(gi.streams, p)
@@ -282,7 +283,14 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 						Msg("Close game stream")
 				}
 
+                gi.RemovePeer(remotePeer)
+
+                // XXX: hax number 1000
+                gi.moves <- playerMove{}
+
 				log.Error().Msg("Dead")
+
+                gi.recv <- remotePeer
 
 				// Do not scan() again
 				continue
@@ -316,9 +324,13 @@ func (gi *GameInstance) syncLoop() {
 	}
 
 	for peerMove := range gi.moves {
-		msg.Moves[peerMove.ID] = peerMove.Dir
+        if peerMove.ID != "" {
+            log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
+            msg.Moves[peerMove.ID] = peerMove.Dir
+        } else {
+            log.Debug().Msg("stub player move received to recheck peer count condition")
+        }
 
-		log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
 
 		if len(msg.Moves) == gi.PeerCount()+1 {
 			gi.recv <- msg
