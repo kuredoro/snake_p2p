@@ -264,13 +264,11 @@ func (g *GameUI) newFood() {
 
 	x1, y1 := g.bound.TopLeft.X, g.bound.TopLeft.Y
 	x2, y2 := g.bound.BottomRight.X, g.bound.BottomRight.Y
-	c := len(g.Snakes) + (g.moveNum / N) + 2
-	var cell int
-	if y2-y1-c <= 0 || x2-x1-c <= 0 {
-		cell = g.r.Intn(10)
-	} else {
-		cell = g.r.Intn((x2 - x1 - c) * (y2 - y1 - c))
+	filled := len(g.Food)
+	for _, snake := range g.Snakes {
+		filled += len(snake.Body) + 1
 	}
+	cell := g.r.Intn((x2 - x1 - 1) * (y2 - y1 - 1) - filled)
 	for row := x1 + 1; row < x2; row++ {
 		for col := y1 + 1; col < y2; col++ {
 			flag := true
