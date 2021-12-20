@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -156,8 +155,8 @@ var defColors = map[tcell.Color]struct{}{
 	tcell.ColorWhite:     {},
 	tcell.ColorPurple:    {},
 	tcell.ColorLightCyan: {},
-	tcell.ColorOlive:	  {},
-	tcell.ColorSilver:	  {},
+	tcell.ColorOlive:     {},
+	tcell.ColorSilver:    {},
 }
 
 func getRandColor(defColors *map[tcell.Color]struct{}) tcell.Color {
@@ -413,16 +412,6 @@ func (g *GameUI) handleMove(dir core.Direction) bool {
 	err := g.gi.SendMove(dir)
 	if err != nil {
 		log.Err(err).Int("move", int(dir)).Msg("Key pressed")
-
-        merr := err.(*multierror.Error)
-        for _, err := range merr.Errors {
-            perr := err.(*core.PeerError)
-
-            log.Err(perr).Msg("purged")
-            g.Snakes[perr.Peer].Alive = false
-            g.gi.RemovePeer(perr.Peer)
-            g.AliveSnakes--
-        }
 		return false
 	}
 
@@ -526,12 +515,14 @@ func (g *GameUI) RunGame(seed int64) {
 			}
 			drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
 		}
+		s.Show()
 	}
 	// GameUI loop
 	for {
 		// Draw GameUI state
 		if g.Over {
 			dead(g.Successful, true)
+			continue
 		} else {
 			drawBox(s, g.bound, boxStyle)
 			for id, snake := range g.Snakes {
@@ -583,20 +574,20 @@ func (g *GameUI) RunGame(seed int64) {
 				continue
 			}
 		case e, ok := <-g.gi.IncommingMoves():
-            switch e := e.(type) {
-            case core.PlayerMoves:
-                if !ok {
-                    quit()
-                }
-                log.Info().Msgf("Incoming message %#v", e.Moves)
+			switch e := e.(type) {
+			case core.PlayerMoves:
+				if !ok {
+					quit()
+				}
+				log.Info().Msgf("Incoming message %#v", e.Moves)
 
-                g.handleMoves(e)
-                timer.Reset(moveRate)
-            case peer.ID:
-                g.Snakes[e].Alive = false
-                g.gi.RemovePeer(e)
-                g.AliveSnakes--
-            }
+				g.handleMoves(e)
+				timer.Reset(moveRate)
+			case peer.ID:
+				g.Snakes[e].Alive = false
+				g.gi.RemovePeer(e)
+				g.AliveSnakes--
+			}
 		case ev := <-eventCh:
 			switch ev := ev.(type) {
 			case *tcell.EventResize:
