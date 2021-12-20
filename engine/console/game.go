@@ -176,16 +176,21 @@ func (g *GameUI) markDead(newHeadCoord map[peer.ID]core.Coord) {
 	// Check snakes for death
 	for id1, coord1 := range newHeadCoord {
 		// head into head
+		dead1 := false
 		for id2, coord2 := range newHeadCoord {
 			if id1.Pretty() == id2.Pretty() {
 				continue
 			}
 			if core.EqualCoord(coord1, coord2) {
-				g.Snakes[id1].Alive = false
+				dead1 = true
+				if g.gi.SelfID() == id2 {
+					g.Over = true
+					g.Successful = true
+					g.WinnerID = peer.ID("1")
+				}
 				g.Snakes[id2].Alive = false
-				g.gi.RemovePeer(id1)
 				g.gi.RemovePeer(id2)
-				g.AliveSnakes -= 2
+				g.AliveSnakes--
 			}
 		}
 		// head into body
@@ -194,19 +199,25 @@ func (g *GameUI) markDead(newHeadCoord map[peer.ID]core.Coord) {
 				continue
 			}
 			if core.EqualCoord(snake.Head, coord1) {
-				g.Snakes[id1].Alive = false
-				g.gi.RemovePeer(id1)
-				g.AliveSnakes--
+				dead1 = true
 				break
 			}
 			for _, b := range snake.Body {
 				if core.EqualCoord(b, coord1) {
-					g.Snakes[id1].Alive = false
-					g.gi.RemovePeer(id1)
-					g.AliveSnakes--
+					dead1 = true
 					break
 				}
 			}
+		}
+		if dead1 {
+			if g.gi.SelfID() == id1 {
+				g.Over = true
+				g.Successful = true
+				g.WinnerID = peer.ID("1")
+			}
+			g.Snakes[id1].Alive = false
+			g.gi.RemovePeer(id1)
+			g.AliveSnakes--
 		}
 	}
 }
@@ -477,30 +488,37 @@ func (g *GameUI) RunGame(seed int64) {
 
 	var lastKeyEvent *tcell.EventKey
 	timer := time.NewTimer(moveRate)
-
+	dead := func(Successful bool, finished bool) {
+		drawBox(s, g.bound, boxStyle)
+		width, height := 0, 0
+		if Successful {
+			height = 4
+			width = 15
+		} else {
+			height = 2
+			width = 15
+		}
+		x1 := (g.bound.BottomRight.X - g.bound.TopLeft.X - width) / 2
+		y1 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y - height) / 2
+		x2 := (g.bound.BottomRight.X - g.bound.TopLeft.X + width) / 2
+		y2 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y + height) / 2
+		drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
+		drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "GameUI Over")
+		if g.Successful {
+			text := ""
+			if finished && g.WinnerID == g.gi.SelfID() {
+				text = "You won :)"
+			} else {
+				text = "You lose :("
+			}
+			drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
+		}
+	}
 	// GameUI loop
 	for {
 		// Draw GameUI state
 		if g.Over {
-			drawBox(s, g.bound, boxStyle)
-			width, height := 0, 0
-			if g.Successful {
-				height = 4
-				width = len(g.WinnerID.Pretty()) + 10
-			} else {
-				height = 2
-				width = 15
-			}
-			x1 := (g.bound.BottomRight.X - g.bound.TopLeft.X - width) / 2
-			y1 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y - height) / 2
-			x2 := (g.bound.BottomRight.X - g.bound.TopLeft.X + width) / 2
-			y2 := (g.bound.BottomRight.Y - g.bound.TopLeft.Y + height) / 2
-			drawBox(s, Boundary{core.Coord{X: x1, Y: y1}, core.Coord{X: x2, Y: y2}}, blackBoxStyle)
-			drawText(s, x1+1, y1+1, x2-1, y2-1, blackBoxStyle, "GameUI Over")
-			if g.Successful {
-				text := "WinnerID " + g.WinnerID.Pretty()
-				drawText(s, x1+1, y1+3, x2-1, y2-1, blackBoxStyle, text)
-			}
+			dead(g.Successful, true)
 		} else {
 			drawBox(s, g.bound, boxStyle)
 			for id, snake := range g.Snakes {
