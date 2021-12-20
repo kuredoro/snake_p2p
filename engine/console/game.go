@@ -8,6 +8,7 @@ import (
 
 	"github.com/kuredoro/snake_p2p/protocol/game"
 	"github.com/libp2p/go-libp2p-core/peer"
+
 	//"strconv"
 
 	//"log"
@@ -358,63 +359,39 @@ func (g *GameUI) checkMove(move core.Coord) bool {
 	return true
 }
 
-func (g *GameUI) handleKeyEvent(ev *tcell.EventKey) bool {
+var shiftMap = map[core.Direction]core.Coord{
+	core.Left:  {X: -1, Y: 0},
+	core.Right: {X: 1, Y: 0},
+	core.Up:    {X: 0, Y: -1},
+	core.Down:  {X: 0, Y: 1},
+}
+
+var key2Dir = map[tcell.Key]core.Direction{
+	tcell.KeyLeft:  core.Left,
+	tcell.KeyRight: core.Right,
+	tcell.KeyUp:    core.Up,
+	tcell.KeyDown:  core.Down,
+}
+
+func (g *GameUI) handleMove(dir core.Direction) bool {
 	id := g.gi.SelfID()
-	if ev.Key() == tcell.KeyUp {
-		snake := g.Snakes[id]
-		move := g.goodCoord(core.Coord{X: snake.Head.X, Y: snake.Head.Y - 1})
-		if !g.checkMove(move) {
-			return false
-		}
-		err := g.gi.SendMove(core.Up)
-		if err != nil {
-			log.Err(err).Int("move", int(core.Up)).Msg("Key pressed")
-			return false
-		}
 
-		log.Info().Int("move", int(core.Up)).Msg("Key pressed")
+	newPos := g.Snakes[id].Head
+	newPos.X += shiftMap[dir].X
+	newPos.Y += shiftMap[dir].Y
 
-	}
-	if ev.Key() == tcell.KeyDown {
-		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X, Y: g.Snakes[id].Head.Y + 1})
-		if !g.checkMove(move) {
-			return false
-		}
-		err := g.gi.SendMove(core.Down)
-		if err != nil {
-			log.Err(err).Int("move", int(core.Down)).Msg("Key pressed")
-			return false
-		}
-
-		log.Info().Int("move", int(core.Down)).Msg("Key pressed")
-
-	}
-	if ev.Key() == tcell.KeyRight {
-		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X + 1, Y: g.Snakes[id].Head.Y})
-		if !g.checkMove(move) {
-			return false
-		}
-		err := g.gi.SendMove(core.Right)
-		if err != nil {
-			log.Err(err).Int("move", int(core.Right)).Msg("Key pressed")
-			return false
-		}
-		log.Info().Int("move", int(core.Right)).Msg("Key pressed")
-
-	}
-	if ev.Key() == tcell.KeyLeft {
-		move := g.goodCoord(core.Coord{X: g.Snakes[id].Head.X - 1, Y: g.Snakes[id].Head.Y})
-		if !g.checkMove(move) {
-			return false
-		}
-		err := g.gi.SendMove(core.Left)
-		if err != nil {
-			log.Err(err).Int("move", int(core.Left)).Msg("Key pressed")
-			return false
-		}
-		log.Info().Int("move", int(core.Left)).Msg("Key pressed")
+	newPos = g.goodCoord(newPos)
+	if !g.checkMove(newPos) {
+		return false
 	}
 
+	err := g.gi.SendMove(dir)
+	if err != nil {
+		log.Err(err).Int("move", int(dir)).Msg("Key pressed")
+		return false
+	}
+
+	log.Info().Int("move", int(core.Up)).Msg("Key pressed")
 	return true
 }
 
@@ -462,11 +439,34 @@ func (g *GameUI) RunGame(seed int64) {
 	s.Clear()
 	s.SetStyle(defStyle)
 
+	defer func() {
+		if err := recover(); err != nil {
+			log.Panic().Str("msg", err.(string)).Msg("panic")
+		}
+	}()
+
+	eventCh := make(chan tcell.Event)
+	defer close(eventCh)
+	go func() {
+		for {
+			e := s.PollEvent()
+			if e == nil {
+				return
+			}
+			eventCh <- e
+		}
+	}()
+
 	// Define function to quit the GameUI
 	quit := func() {
 		s.Fini()
 		os.Exit(0)
 	}
+
+	const moveRate = 100 * time.Millisecond
+
+	var lastKeyEvent *tcell.EventKey
+	timer := time.NewTimer(moveRate)
 
 	// GameUI loop
 	for {
@@ -518,10 +518,31 @@ func (g *GameUI) RunGame(seed int64) {
 		}
 		s.Show()
 
-		if s.HasPendingEvent() {
-			// Poll event
-			ev := s.PollEvent()
-			// Process event
+		select {
+		case <-timer.C:
+			if lastKeyEvent == nil {
+				timer.Reset(moveRate)
+				continue
+			}
+
+			dir := key2Dir[lastKeyEvent.Key()]
+
+			moved := g.handleMove(dir)
+
+			if !moved {
+				log.Warn().Msg("c")
+				timer.Reset(moveRate)
+				continue
+			}
+		case moves, ok := <-g.gi.IncommingMoves():
+			if !ok {
+				quit()
+			}
+			log.Info().Msgf("Incoming message %#v", moves.Moves)
+
+			g.handleMoves(moves)
+			timer.Reset(moveRate)
+		case ev := <-eventCh:
 			switch ev := ev.(type) {
 			case *tcell.EventResize:
 				s.Sync()
@@ -533,41 +554,12 @@ func (g *GameUI) RunGame(seed int64) {
 					quit()
 				}
 
-				moved := g.handleKeyEvent(ev)
-				if !moved {
+				_, arrow := key2Dir[ev.Key()]
+				if !arrow {
 					continue
 				}
 
-				// TODO: spare me...
-				timer := time.NewTimer(20 * time.Millisecond)
-			getIncomming:
-				for {
-					select {
-					case moves, ok := <-g.gi.IncommingMoves():
-						// Process GameUI event
-						if !ok {
-							// s.Fini()
-							panic("Channel is closed")
-						}
-						log.Info().Msgf("Incoming message %#v", moves.Moves)
-						g.handleMoves(moves)
-						break getIncomming
-					case <-timer.C:
-						timer.Reset(20 * time.Millisecond)
-
-						if s.HasPendingEvent() {
-							// Poll event
-							ev := s.PollEvent()
-							// Process event
-							switch ev := ev.(type) {
-							case *tcell.EventKey:
-								if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
-									quit()
-								}
-							}
-						}
-					}
-				}
+				lastKeyEvent = ev
 			}
 		}
 	}
