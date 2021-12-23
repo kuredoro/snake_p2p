@@ -2,17 +2,17 @@ package main
 
 import (
 	"flag"
+	"os"
+
 	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/engine/console"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/context"
-	"os"
-
 	//"github.com/rivo/tview"
 )
 
 func main() {
-	//gatherFlag := flag.Int("gather", 0, "create gather point for N players")
+	// gatherFlag := flag.Int("gather", 0, "create gather point for N players")
 	logNameFlag := flag.String("logname", "ui_logs.txt", "Name of log file")
 	flag.Parse()
 

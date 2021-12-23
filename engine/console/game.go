@@ -558,9 +558,9 @@ func (g *GameUI) RunGame(seed int64) {
 
 		select {
 		case <-timer.C:
-            if g.Over {
-                continue
-            }
+			if g.Over {
+				continue
+			}
 			if lastKeyEvent == nil {
 				timer.Reset(moveRate)
 				continue
@@ -576,9 +576,9 @@ func (g *GameUI) RunGame(seed int64) {
 				continue
 			}
 		case e, ok := <-g.gi.IncommingMoves():
-            if g.Over {
-                continue
-            }
+			if g.Over {
+				continue
+			}
 			switch e := e.(type) {
 			case core.PlayerMoves:
 				if !ok {

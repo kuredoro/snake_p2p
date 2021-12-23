@@ -97,7 +97,7 @@ func (gi *GameInstance) RemovePeer(p peer.ID) error {
 
 	err := s.Close()
 	if err != nil {
-        log.Err(err).Msg("Remove peer and close connection")
+		log.Err(err).Msg("Remove peer and close connection")
 	}
 
 	delete(gi.streams, p)
@@ -283,14 +283,14 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 						Msg("Close game stream")
 				}
 
-                gi.RemovePeer(remotePeer)
+				gi.RemovePeer(remotePeer)
 
-                // XXX: hax number 1000
-                gi.moves <- playerMove{}
+				// XXX: hax number 1000
+				gi.moves <- playerMove{}
 
 				log.Error().Msg("Dead")
 
-                gi.recv <- remotePeer
+				gi.recv <- remotePeer
 
 				// Do not scan() again
 				continue
@@ -324,13 +324,12 @@ func (gi *GameInstance) syncLoop() {
 	}
 
 	for peerMove := range gi.moves {
-        if peerMove.ID != "" {
-            log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
-            msg.Moves[peerMove.ID] = peerMove.Dir
-        } else {
-            log.Debug().Msg("stub player move received to recheck peer count condition")
-        }
-
+		if peerMove.ID != "" {
+			log.Debug().Str("peer", peerMove.ID.Pretty()).Int("dir", int(peerMove.Dir)).Msg("Received move")
+			msg.Moves[peerMove.ID] = peerMove.Dir
+		} else {
+			log.Debug().Msg("stub player move received to recheck peer count condition")
+		}
 
 		if len(msg.Moves) == gi.PeerCount()+1 {
 			gi.recv <- msg

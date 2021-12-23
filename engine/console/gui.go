@@ -2,27 +2,28 @@ package console
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
 	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/context"
-	"os"
-	"strconv"
-	"time"
 )
 
 type GatherUI struct {
-	h *snake.Node
-	app *tview.Application
-	flex *tview.Flex
+	h             *snake.Node
+	app           *tview.Application
+	flex          *tview.Flex
 	myGatherPoint *tview.TextView
-	gameList *tview.Table
-	createBtn *tview.Button
-	newGame *tview.InputField
-	maxPlayers int
-	gatherPoints map[string]*gather.GatherPointMessage
+	gameList      *tview.Table
+	createBtn     *tview.Button
+	newGame       *tview.InputField
+	maxPlayers    int
+	gatherPoints  map[string]*gather.GatherPointMessage
 }
 
 func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int, color tcell.Color) {
@@ -51,10 +52,10 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 	g.app = tview.NewApplication()
 	g.gatherPoints = make(map[string]*gather.GatherPointMessage)
 	g.myGatherPoint = tview.NewTextView().
-						SetRegions(true).
-						SetDynamicColors(true).
-						SetWordWrap(true).
-						SetChangedFunc(func() { g.app.Draw() })
+		SetRegions(true).
+		SetDynamicColors(true).
+		SetWordWrap(true).
+		SetChangedFunc(func() { g.app.Draw() })
 	g.myGatherPoint.SetBorder(true).SetTitle("My Gather Point")
 	fmt.Fprintf(g.myGatherPoint, "No gather point created.")
 
@@ -88,16 +89,16 @@ func NewGatherUI(h *snake.Node) *GatherUI {
 		if err != nil {
 			log.Err(err).Msg("Join gather point")
 		}
-		//cell := table.GetCell(row, 2)
-		//cell.Text = "✔️"
+		// cell := table.GetCell(row, 2)
+		// cell.Text = "✔️"
 		g.gameList.GetCell(row, 2).SetText("〇")
 	})
 
 	g.newGame = tview.NewInputField().
-					SetLabel("Enter the maximum number of players ").
-					SetFieldWidth(0).
-					SetFieldBackgroundColor(tcell.ColorBlack).
-					SetAcceptanceFunc(tview.InputFieldInteger)
+		SetLabel("Enter the maximum number of players ").
+		SetFieldWidth(0).
+		SetFieldBackgroundColor(tcell.ColorBlack).
+		SetAcceptanceFunc(tview.InputFieldInteger)
 
 	g.newGame.SetDoneFunc(func(key tcell.Key) {
 		if key != tcell.KeyEnter {
@@ -173,7 +174,7 @@ func (g *GatherUI) eventLoop() {
 
 			g.gatherPoints[msg.ConnectTo.ID.Pretty()] = msg
 			// Add cell to gather points table
-			addRow(g.gameList, msg, len(g.gatherPoints) + 1, tcell.ColorWhite)
+			addRow(g.gameList, msg, len(g.gatherPoints)+1, tcell.ColorWhite)
 			g.app.Draw()
 		case <-sigCh:
 			g.h.Close()
