@@ -2,12 +2,12 @@
 
 A distributed battle-royal snake game for 2 or more people.
 
-### Roadmap
+### v0.1 roadmap
 
-- [ ] Nodes can connect to other nodes and establish a pub/sub network
-- [ ] Party protocol (PARTY, JOIN messages, peer connect/disconnect handling)
-- [ ] Snake protocol (synchronized state via complete graph connection and a blockchain history)
-- [ ] Console game implementation (processing of the events published by the protocols and interaction with the user)
+- [x] Nodes can connect to other nodes and establish a pub/sub network
+- [x] Party protocol (PARTY, JOIN messages, peer connect/disconnect handling)
+- [x] Snake protocol (synchronized state via complete graph connection ~~and a blockchain history~~)
+- [x] Console game implementation (processing of the events published by the protocols and interaction with the user)
 
 ### Party protocol sketch
 
