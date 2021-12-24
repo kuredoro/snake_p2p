@@ -35,7 +35,10 @@ func (g *GameService) Connect(ctx context.Context, p peer.ID) error {
 		return fmt.Errorf("new game stream: %v", err)
 	}
 
-	s.Write(nil)
+	_, err = s.Write(nil)
+	if err != nil {
+		return fmt.Errorf("force new game stream: %v", err)
+	}
 
 	g.instance.AddPeer(s)
 
