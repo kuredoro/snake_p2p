@@ -281,7 +281,7 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 						Msg("Close game stream")
 				}
 
-                gi.RemovePeer(remotePeer)
+				gi.RemovePeer(remotePeer)
 
 				// XXX: hax number 1000
 				gi.moves <- playerMove{}
