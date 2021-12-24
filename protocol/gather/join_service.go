@@ -37,6 +37,12 @@ func NewJoinService(ctx context.Context, h host.Host, game *game.GameService, pi
 		return nil, fmt.Errorf("create gather protocol stream: %v", err)
 	}
 
+	// Makes sure the facilitator's callback is called.
+	_, err = stream.Write(nil)
+	if err != nil {
+		return nil, fmt.Errorf("force new gather protocol stream: %v", err)
+	}
+
 	logger := log.Logger.With().Str("facilitator", pID.Pretty()).Logger()
 
 	service := &JoinService{
@@ -53,9 +59,6 @@ func NewJoinService(ctx context.Context, h host.Host, game *game.GameService, pi
 
 		gameCh: gameCh,
 	}
-
-	// Makes sure the facilitator's callback is called.
-	stream.Write(nil)
 
 	go service.run()
 
