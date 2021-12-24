@@ -86,13 +86,13 @@ func (gi *GameInstance) AddPeer(s network.Stream) {
 	gi.mu.Unlock()
 }
 
-func (gi *GameInstance) RemovePeer(p peer.ID) error {
+func (gi *GameInstance) RemovePeer(p peer.ID) {
 	gi.mu.Lock()
 	defer gi.mu.Unlock()
 
 	s, exists := gi.streams[p]
 	if !exists {
-		return nil
+		return
 	}
 
 	err := s.Close()
@@ -101,8 +101,6 @@ func (gi *GameInstance) RemovePeer(p peer.ID) error {
 	}
 
 	delete(gi.streams, p)
-
-	return nil
 }
 
 func (gi *GameInstance) Close() {
@@ -283,7 +281,7 @@ func (gi *GameInstance) readLoop(stream network.Stream) {
 						Msg("Close game stream")
 				}
 
-				gi.RemovePeer(remotePeer)
+                gi.RemovePeer(remotePeer)
 
 				// XXX: hax number 1000
 				gi.moves <- playerMove{}
