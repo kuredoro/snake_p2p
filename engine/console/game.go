@@ -68,7 +68,7 @@ func (boundary Boundary) Contains(coord core.Coord) bool {
 func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string) {
 	row := y1
 	col := x1
-	for _, r := range []rune(text) {
+	for _, r := range text {
 		s.SetContent(col, row, r, nil, style)
 		col++
 		if col >= x2 {
@@ -142,14 +142,6 @@ func drawFood(s tcell.Screen, food core.Coord, style tcell.Style, boundary Bound
 	return nil
 }
 
-func drawGridCell(s tcell.Screen, cell core.Coord, style tcell.Style, boundary Boundary) error {
-	if boundary.Contains(cell) {
-		return fmt.Errorf("cell is out of boundary")
-	}
-	s.SetContent(cell.X, cell.Y, tcell.RuneBullet, nil, style)
-	return nil
-}
-
 var defColors = map[tcell.Color]struct{}{
 	tcell.ColorReset:     {},
 	tcell.ColorWhite:     {},
@@ -162,7 +154,7 @@ var defColors = map[tcell.Color]struct{}{
 func getRandColor(defColors *map[tcell.Color]struct{}) tcell.Color {
 	color := tcell.PaletteColor(rand.Intn(256))
 	_, ok := (*defColors)[color]
-	for ok == true {
+	for ok {
 		color = tcell.PaletteColor(rand.Intn(256))
 		_, ok = (*defColors)[color]
 	}
@@ -257,20 +249,20 @@ func (g *GameUI) eatFood(newHeadCoord map[peer.ID]core.Coord) {
 			g.Snakes[id].Body = append(g.Snakes[id].Body, core.Coord{})
 			// remove food from field
 			delete(g.Food, foodID)
-			log.Info().Msgf("Food on (%#d, %#d) eaten by %#s", coord.X, coord.Y, id.Pretty())
+			log.Info().Msgf("Food on (%d, %d) eaten by %s", coord.X, coord.Y, id.Pretty())
 		}
 	}
 }
 
 func (g *GameUI) moveSnakes(newHeadCoord map[peer.ID]core.Coord) {
 	for id, coord := range newHeadCoord {
-		if g.Snakes[id].Alive == false {
+		if !g.Snakes[id].Alive {
 			continue
 		}
 		// move head
 		prevHead := g.Snakes[id].Head
 		g.Snakes[id].Head = coord
-		log.Info().Msgf("New coordinates (%#d, %#d) for snake %#s", g.Snakes[id].Head.X, g.Snakes[id].Head.Y, id.Pretty())
+		log.Info().Msgf("New coordinates (%d, %d) for snake %s", g.Snakes[id].Head.X, g.Snakes[id].Head.Y, id.Pretty())
 		// move snakes body
 		if len(g.Snakes[id].Body) == 0 {
 			continue
@@ -321,7 +313,7 @@ func (g *GameUI) newFood() {
 			if cell == 0 {
 				g.Food[g.foodLastID] = core.Coord{X: row, Y: col}
 				g.foodLastID++
-				log.Info().Msgf("New food should be created on (%#d, %#d)", row, col)
+				log.Info().Msgf("New food should be created on (%d, %d)", row, col)
 				return
 			}
 		}
@@ -370,7 +362,7 @@ func (g *GameUI) handleMoves(moves core.PlayerMoves) {
 	g.moveSnakes(newHeadCoord)
 	g.newFood()
 	g.moveNum++
-	log.Info().Msgf("Next move %#d", g.moveNum)
+	log.Info().Msgf("Next move %d", g.moveNum)
 }
 
 func (g *GameUI) checkMove(move core.Coord) bool {

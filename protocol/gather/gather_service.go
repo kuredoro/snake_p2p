@@ -120,60 +120,57 @@ func (gs *GatherService) GatherHandler(stream network.Stream) {
 
 	// TODO: writing to streams should probably be done from this function
 	// for synchronization purposes, but maybe stream.Write is thread-safe...
-	for {
-		select {
-		case ok := <-readCh:
-			if !ok {
-				log.Info().Str("id", peer.Pretty()).Msg("Seeker withdrawn")
-				return
-			}
+    for ok := range readCh {
+        if !ok {
+            log.Info().Str("id", peer.Pretty()).Msg("Seeker withdrawn")
+            return
+        }
 
-			var msg GatherMessage
-			err := json.Unmarshal(scanner.Bytes(), &msg)
-			if err != nil {
-				log.Warn().Err(err).Str("seeker", remotePeer.Pretty()).Msg("Unmarshal JSON")
-				go scan()
-				continue
-			}
+        var msg GatherMessage
+        err := json.Unmarshal(scanner.Bytes(), &msg)
+        if err != nil {
+            log.Warn().Err(err).Str("seeker", remotePeer.Pretty()).Msg("Unmarshal JSON")
+            go scan()
+            continue
+        }
 
-			switch msg.Type {
-			case Connected:
-				if len(msg.Addrs) == 0 {
-					log.Warn().
-						Str("seeker", remotePeer.Pretty()).
-						Msg("Seeker-seeker connection message lists no peers")
-					break
-				}
+        switch msg.Type {
+        case Connected:
+            if len(msg.Addrs) == 0 {
+                log.Warn().
+                    Str("seeker", remotePeer.Pretty()).
+                    Msg("Seeker-seeker connection message lists no peers")
+                break
+            }
 
-				log.Info().
-					Str("from", remotePeer.Pretty()).
-					Str("to", msg.Addrs[0].ID.Pretty()).
-					Msg("New seeker-seeker connection")
+            log.Info().
+                Str("from", remotePeer.Pretty()).
+                Str("to", msg.Addrs[0].ID.Pretty()).
+                Msg("New seeker-seeker connection")
 
-				gs.meshCh <- addDoubleEdge(remotePeer, msg.Addrs[0].ID)
-			case Disconnected:
-				if len(msg.Addrs) == 0 {
-					log.Warn().
-						Str("seeker", remotePeer.Pretty()).
-						Msg("Seeker-seeker connection reset message lists no peers")
-					break
-				}
+            gs.meshCh <- addDoubleEdge(remotePeer, msg.Addrs[0].ID)
+        case Disconnected:
+            if len(msg.Addrs) == 0 {
+                log.Warn().
+                    Str("seeker", remotePeer.Pretty()).
+                    Msg("Seeker-seeker connection reset message lists no peers")
+                break
+            }
 
-				log.Info().
-					Str("from", remotePeer.Pretty()).
-					Str("to", msg.Addrs[0].ID.Pretty()).
-					Msg("Seeker-seeker connection reset")
+            log.Info().
+                Str("from", remotePeer.Pretty()).
+                Str("to", msg.Addrs[0].ID.Pretty()).
+                Msg("Seeker-seeker connection reset")
 
-				gs.meshCh <- removeDoubleEdge(remotePeer, msg.Addrs[0].ID)
-			default:
-				log.Warn().
-					Str("seeker", remotePeer.Pretty()).
-					Int("type", int(msg.Type)).
-					Msg("Gathering message of unknown type")
-			}
+            gs.meshCh <- removeDoubleEdge(remotePeer, msg.Addrs[0].ID)
+        default:
+            log.Warn().
+                Str("seeker", remotePeer.Pretty()).
+                Int("type", int(msg.Type)).
+                Msg("Gathering message of unknown type")
+        }
 
-			go scan()
-		}
+        go scan()
 	}
 }
 
