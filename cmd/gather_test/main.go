@@ -64,12 +64,23 @@ func main() {
 
 				log.Info().Msg("Sent move")
 
-				move := <-gi.IncommingMoves()
-				for peer, dir := range move.Moves {
-					log.Info().
-						Str("peer", peer.Pretty()).
-						Int("dir", int(dir)).
-						Msg("Player moved")
+				e, ok := <-gi.IncommingMoves()
+				switch e := e.(type) {
+				case core.PlayerMoves:
+					if !ok {
+						log.Info().Msg("GameInstance closed incoming moves")
+					}
+
+					log.Info().Msgf("Incoming message %#v", e.Moves)
+
+					for peer, dir := range e.Moves {
+						log.Info().
+							Str("peer", peer.Pretty()).
+							Int("dir", int(dir)).
+							Msg("Player moved")
+					}
+				case peer.ID:
+					log.Info().Str("player", e.Pretty()).Msg("Player disconnected")
 				}
 			}
 
