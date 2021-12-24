@@ -222,11 +222,11 @@ func (gi *GameInstance) SendMove(move core.Direction) (err error) {
 	msg := strconv.Itoa(int(move)) + "\n"
 
 	for p, s := range gi.streams {
-		_, err := s.Write([]byte(msg))
-		if err != nil {
+		_, streamErr := s.Write([]byte(msg))
+		if streamErr != nil {
 			err = multierror.Append(err, &core.PeerError{
 				Peer: p,
-				Err:  err,
+				Err:  streamErr,
 			})
 		}
 	}
