@@ -2,11 +2,51 @@ package menu_test
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kuredoro/snake_p2p/cmd/snakep2p/tui/menu"
 )
+
+var tagPattern = regexp.MustCompile(`\[([a-zA-Z]+|#[0-9a-zA-Z]{6}|\-)?(:([a-zA-Z]+|#[0-9a-zA-Z]{6}|\-)?(:([01]+|[bdilrsu]+|\-)?)?)?\]`)
+
+type Tag tcell.Style
+
+func NewTag(str string) Tag {
+	style := tcell.StyleDefault
+
+	parts := tagPattern.FindStringSubmatch(str)
+
+	if len(parts) >= 2 && parts[1] != "" && parts[1] != "-" {
+		style = style.Foreground(tcell.GetColor(parts[1]))
+	}
+
+	if len(parts) >= 4 && parts[3] != "" && parts[3] != "-" {
+		style = style.Background(tcell.GetColor(parts[3]))
+	}
+
+	if len(parts) >= 6 && parts[5] != "" && parts[5] != "-" {
+		mask, err := strconv.ParseInt(parts[5], 2, 64)
+		if err != nil {
+			panic(fmt.Errorf("attempt to create a tag from a malformed string %q: attributes: %v", str, err))
+		}
+
+		style = style.Attributes(tcell.AttrMask(mask))
+	}
+
+	return Tag(style)
+}
+
+func (t Tag) String() string {
+	fg, bg, attr := tcell.Style(t).Decompose()
+
+	return fmt.Sprintf("[#%06x:#%06x:%b]", fg.Hex(), bg.Hex(), attr)
+}
+
+func (t Tag) Style() tcell.Style {
+	return tcell.Style(t)
+}
 
 func runesEqual(a, b []rune) bool {
 	if len(a) != len(b) {
