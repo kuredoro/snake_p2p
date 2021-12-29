@@ -2,6 +2,7 @@ package menu_test
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"testing"
 
@@ -76,6 +77,7 @@ func AssertSimulationScreen(t *testing.T, got tcell.SimulationScreen, want []str
 	if len(gotCells) != len(wantCells) {
 		t.Fatalf("got simulation screen that contains %d cells, want %d, even though the "+
 			"reported dimensions (%dx%d) coincide", len(gotCells), len(wantCells), w, h)
+		return
 	}
 
 	for i := range gotCells {
@@ -87,6 +89,11 @@ func AssertSimulationScreen(t *testing.T, got tcell.SimulationScreen, want []str
 			t.Errorf("at %dx%d got simcell with contents %v, want %v", i%w+1, i/w+1,
 				gotCells[i].Runes, wantCells[i].Runes)
 		}
+
+		if gotCells[i].Style != wantCells[i].Style {
+			t.Errorf("at %dx%d got simcell with style %v, want %v", i%w+1, i/w+1,
+				Tag(gotCells[i].Style), Tag(wantCells[i].Style))
+		}
 	}
 }
 
@@ -95,19 +102,47 @@ func SimCellsFromStrings(rows []string) ([]tcell.SimCell, int, int) {
 		return nil, 0, 0
 	}
 
-	width := len(rows[0])
+	width := -1
 	for i := range rows {
-		if len(rows[i]) != width {
+		row := tagPattern.ReplaceAllLiteralString(rows[i], "")
+
+		if width == -1 {
+			width = len(row)
+			continue
+		}
+
+		if len(row) != width {
 			panic(fmt.Sprintf("inconsistent simulation screen row dimensions: "+
 				"row #1 being %d columns wide, while row #%d being %d",
-				width, i+1, len(rows[i])))
+				width, i+1, len(row)))
 		}
 	}
 
+	style := tcell.StyleDefault
 	cells := make([]tcell.SimCell, len(rows)*width)
 	for y := range rows {
-		for x, r := range rows[y] {
-			cells[width*y+x].Runes = []rune{r}
+		rowRunes := []rune(rows[y])
+
+		tags := tagPattern.FindAllString(rows[y], -1)
+		tagPos := tagPattern.FindAllStringIndex(rows[y], -1)
+
+		for i, x := 0, 0; i < len(rowRunes); i++ {
+			if len(tagPos) != 0 && tagPos[0][0] == i {
+				style = NewTag(tags[0]).Style()
+				i = tagPos[0][1] - 1
+
+				tags = tags[1:]
+				tagPos = tagPos[1:]
+				continue
+			}
+
+			if x == width {
+				panic(fmt.Sprintf("while inflating simcell screen we started wrtining beyond it at row %d", y+1))
+			}
+
+			cells[y*width+x].Runes = []rune{rowRunes[i]}
+			cells[y*width+x].Style = style
+			x++
 		}
 	}
 
@@ -128,6 +163,26 @@ func TestMenu(t *testing.T) {
 			"    ",
 			"    ",
 			"    ",
+		}
+
+		AssertSimulationScreen(t, s, want)
+	})
+
+	t.Run("menu with an item", func(t *testing.T) {
+		s := tcell.NewSimulationScreen("UTF-8")
+		s.SetSize(8, 1)
+
+		callCount := 0
+		items := []menu.MenuItem{
+			{Hotkey: "f", Name: "Foo", Action: func() { callCount++ }},
+		}
+
+		m := menu.New(items)
+
+		m.Draw(s)
+
+		want := []string{
+			fmt.Sprintf("%sf%sFoo    ", Tag(m.GetBackgroundStyle()), Tag(m.GetButtonStyle())),
 		}
 
 		AssertSimulationScreen(t, s, want)
