@@ -5,7 +5,7 @@ import (
 	"os"
 
 	snake "github.com/kuredoro/snake_p2p"
-	"github.com/kuredoro/snake_p2p/engine/console"
+	"github.com/kuredoro/snake_p2p/cmd/snakep2p/tui"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/context"
 	//"github.com/rivo/tview"
@@ -27,7 +27,7 @@ func main() {
 
 	log.Info().Msg("Node initialized")
 
-	g := console.NewGatherUI(h)
+	g := tui.NewGatherUI(h)
 	// Shortcuts to navigate the slides.
 	//console.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 	//	if event.Key() == tcell.KeyCtrlN {
