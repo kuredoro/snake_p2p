@@ -14,15 +14,15 @@ import (
 )
 
 type GatherUI struct {
-	h             *snake.Node
-	app           *cview.Application
-	flex          *cview.Flex
-	myGatherPoint *cview.TextView
-	gameList      *cview.Table
-	createBtn     *cview.Button
-	newGame       *cview.InputField
-	maxPlayers    int
-	gatherPoints  map[string]*gather.GatherPointMessage
+	h   *snake.Node
+	app *cview.Application
+	// flex          *cview.Flex
+	// myGatherPoint *cview.TextView
+	// gameList      *cview.Table
+	// createBtn     *cview.Button
+	// newGame       *cview.InputField
+	// maxPlayers    int
+	gatherPoints map[string]*gather.GatherPointMessage
 }
 
 func addRow(table *cview.Table, msg *gather.GatherPointMessage, row int, color tcell.Color) {
@@ -192,7 +192,7 @@ func (g *GatherUI) eventLoop() {
 
 			g.gatherPoints[msg.ConnectTo.ID.Pretty()] = msg
 			// Add cell to gather points table
-			addRow(g.gameList, msg, len(g.gatherPoints)+1, tcell.ColorWhite)
+			// addRow(g.gameList, msg, len(g.gatherPoints)+1, tcell.ColorWhite)
 			g.app.Draw()
 		case <-sigCh:
 			g.h.Close()
