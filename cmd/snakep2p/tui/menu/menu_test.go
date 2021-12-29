@@ -41,12 +41,28 @@ func NewTag(str string) Tag {
 
 func (t Tag) String() string {
 	fg, bg, attr := tcell.Style(t).Decompose()
-
 	return fmt.Sprintf("[#%06x:#%06x:%b]", fg.Hex(), bg.Hex(), attr)
 }
 
 func (t Tag) Style() tcell.Style {
 	return tcell.Style(t)
+}
+
+func (t Tag) IsEqualTo(other Tag) bool {
+	fg1, bg1, attr1 := t.Style().Decompose()
+	fg2, bg2, attr2 := other.Style().Decompose()
+
+	fgOk := fg1.Hex() == fg2.Hex()
+	if !fgOk {
+		fgOk = (fg1.Hex() == -1 && fg2.Hex() == 0) || (fg1.Hex() == 0 && fg2.Hex() == -1)
+	}
+
+	bgOk := bg1.Hex() == bg2.Hex()
+	if !bgOk {
+		bgOk = (bg1.Hex() == -1 && bg2.Hex() == 0) || (bg1.Hex() == 0 && bg2.Hex() == -1)
+	}
+
+	return fgOk && bgOk && attr1 == attr2
 }
 
 func runesEqual(a, b []rune) bool {
@@ -86,13 +102,13 @@ func AssertSimulationScreen(t *testing.T, got tcell.SimulationScreen, want []str
 		}
 
 		if !runesEqual(gotCells[i].Runes, wantCells[i].Runes) {
-			t.Errorf("at %dx%d got simcell with contents %v, want %v", i%w+1, i/w+1,
-				gotCells[i].Runes, wantCells[i].Runes)
+			t.Errorf("at %dx%d got simcell with contents %q, want %q", i%w+1, i/w+1,
+				string(gotCells[i].Runes), string(wantCells[i].Runes))
 		}
 
-		if gotCells[i].Style != wantCells[i].Style {
-			t.Errorf("at %dx%d got simcell with style %v, want %v", i%w+1, i/w+1,
-				Tag(gotCells[i].Style), Tag(wantCells[i].Style))
+		if !Tag(gotCells[i].Style).IsEqualTo(Tag(wantCells[i].Style)) {
+			t.Errorf("at %dx%d got simcell with style %v, want %v (content: %q)", i%w+1, i/w+1,
+				Tag(gotCells[i].Style), Tag(wantCells[i].Style), string(gotCells[i].Runes))
 		}
 	}
 }
@@ -152,11 +168,17 @@ func SimCellsFromStrings(rows []string) ([]tcell.SimCell, int, int) {
 func TestMenu(t *testing.T) {
 	t.Run("empty menu draws nothing", func(t *testing.T) {
 		s := tcell.NewSimulationScreen("UTF-8")
+		if err := s.Init(); err != nil {
+			panic(fmt.Errorf("simulation screen couldn't been initialized: %v", err))
+		}
 		s.SetSize(4, 4)
 
 		m := menu.New(nil)
+		m.SetRect(0, 0, 4, 4)
 
 		m.Draw(s)
+
+		s.Show()
 
 		want := []string{
 			"    ",
@@ -170,6 +192,10 @@ func TestMenu(t *testing.T) {
 
 	t.Run("menu with an item", func(t *testing.T) {
 		s := tcell.NewSimulationScreen("UTF-8")
+		if err := s.Init(); err != nil {
+			panic(fmt.Errorf("simulation screen couldn't been initialized: %v", err))
+		}
+
 		s.SetSize(8, 1)
 
 		callCount := 0
@@ -178,8 +204,11 @@ func TestMenu(t *testing.T) {
 		}
 
 		m := menu.New(items)
+		m.SetRect(0, 0, 8, 1)
 
 		m.Draw(s)
+
+		s.Show()
 
 		want := []string{
 			fmt.Sprintf("%sf%sFoo    ", Tag(m.GetBackgroundStyle()), Tag(m.GetButtonStyle())),
