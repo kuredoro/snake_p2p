@@ -1,133 +1,151 @@
 package tui
 
 import (
-	"fmt"
+	//"fmt"
 	"os"
-	"strconv"
-	"time"
+	//"strconv"
+	//"time"
 
+	"code.rocketnine.space/tslocum/cview"
 	"github.com/gdamore/tcell/v2"
 	snake "github.com/kuredoro/snake_p2p"
 	"github.com/kuredoro/snake_p2p/protocol/gather"
-	"github.com/rivo/tview"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/net/context"
 )
 
 type GatherUI struct {
 	h             *snake.Node
-	app           *tview.Application
-	flex          *tview.Flex
-	myGatherPoint *tview.TextView
-	gameList      *tview.Table
-	createBtn     *tview.Button
-	newGame       *tview.InputField
+	app           *cview.Application
+	flex          *cview.Flex
+	myGatherPoint *cview.TextView
+	gameList      *cview.Table
+	createBtn     *cview.Button
+	newGame       *cview.InputField
 	maxPlayers    int
 	gatherPoints  map[string]*gather.GatherPointMessage
 }
 
-func addRow(table *tview.Table, msg *gather.GatherPointMessage, row int, color tcell.Color) {
-	ID := msg.ConnectTo.ID.Pretty()
-	tableCell := tview.NewTableCell(ID).
-		SetTextColor(color).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 0, tableCell)
-	maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
-	tableCell = tview.NewTableCell(maxPlayers).
-		SetTextColor(color).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 1, tableCell)
-	tableCell = tview.NewTableCell("").
-		SetTextColor(color).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(row, 2, tableCell)
+func addRow(table *cview.Table, msg *gather.GatherPointMessage, row int, color tcell.Color) {
+	/*
+		ID := msg.ConnectTo.ID.Pretty()
+		tableCell := cview.NewTableCell(ID)
+			tableCell.SetTextColor(color)
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(row, 0, tableCell)
+		maxPlayers := strconv.Itoa(int(msg.DesiredPlayerCount))
+		tableCell = cview.NewTableCell(maxPlayers).
+			SetTextColor(color).
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(row, 1, tableCell)
+		tableCell = cview.NewTableCell("").
+			SetTextColor(color).
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(row, 2, tableCell)
+	*/
+}
+
+func NewMenu(actions []int) cview.Primitive {
+	foo := cview.NewTextView()
+	foo.SetText("This will be the main menu")
+	return foo
 }
 
 func NewGatherUI(h *snake.Node) *GatherUI {
 	g := &GatherUI{}
 	g.h = h
-	g.app = tview.NewApplication()
-	g.gatherPoints = make(map[string]*gather.GatherPointMessage)
-	g.myGatherPoint = tview.NewTextView().
-		SetRegions(true).
-		SetDynamicColors(true).
-		SetWordWrap(true).
-		SetChangedFunc(func() { g.app.Draw() })
-	g.myGatherPoint.SetBorder(true).SetTitle("My Gather Point")
-	fmt.Fprintf(g.myGatherPoint, "No gather point created.")
+	g.app = cview.NewApplication()
 
-	table := tview.NewTable().
-		SetFixed(1, 0).
-		SetSelectable(true, false)
-	tableCell := tview.NewTableCell("ID").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(1, 0, tableCell)
-	tableCell = tview.NewTableCell("Players needed").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(1, 1, tableCell)
-	tableCell = tview.NewTableCell("Joined").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetExpansion(1)
-	table.SetCell(1, 2, tableCell)
-	g.gameList = table
-	g.gameList.SetSelectedFunc(func(row, column int) {
-		if row == 1 {
-			return
-		}
-		ID := g.gameList.GetCell(row, 0).Text
-		msg := g.gatherPoints[ID]
-		ctx := context.Background()
-		err := g.h.JoinGatherPoint(ctx, msg.ConnectTo)
-		if err != nil {
-			log.Err(err).Msg("Join gather point")
-		}
-		// cell := table.GetCell(row, 2)
-		// cell.Text = "✔️"
-		g.gameList.GetCell(row, 2).SetText("〇")
-	})
+	panels := cview.NewPanels()
 
-	g.newGame = tview.NewInputField().
-		SetLabel("Enter the maximum number of players ").
-		SetFieldWidth(0).
-		SetFieldBackgroundColor(tcell.ColorBlack).
-		SetAcceptanceFunc(tview.InputFieldInteger)
+	mainMenu := NewMenu(nil)
 
-	g.newGame.SetDoneFunc(func(key tcell.Key) {
-		if key != tcell.KeyEnter {
-			// we don't want to do anything if they just tabbed away
-			return
-		}
-		g.maxPlayers, _ = strconv.Atoi(g.newGame.GetText())
-		err := g.h.CreateGatherPoint(g.maxPlayers, time.Second)
-		if err != nil {
-			log.Err(err).Msg("New gather point")
-		}
-		g.myGatherPoint.Clear()
-		fmt.Fprintf(g.myGatherPoint, "Max # of players: %d", g.maxPlayers)
-		g.flex.RemoveItem(g.newGame)
-	})
+	panels.AddPanel("main_menu", mainMenu, true, true)
 
-	g.createBtn = tview.NewButton("Create gather point").SetSelectedFunc(func() {
-		g.flex.RemoveItem(g.createBtn)
-		g.flex.AddItem(g.newGame, 0, 1, false)
-	})
-
-	g.flex = tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(g.myGatherPoint, 3, 1, false).
-		AddItem(g.gameList, 0, 3, false).
-		AddItem(g.createBtn, 2, 1, false)
-
-	g.app.SetRoot(g.flex, true).EnableMouse(true)
+	g.app.SetRoot(panels, true)
+	g.app.EnableMouse(true)
 	return g
+
+	/*
+		g.gatherPoints = make(map[string]*gather.GatherPointMessage)
+		g.myGatherPoint = cview.NewTexcview().
+			SetRegions(true).
+			SetDynamicColors(true).
+			SetWordWrap(true).
+			SetChangedFunc(func() { g.app.Draw() })
+		g.myGatherPoint.SetBorder(true).SetTitle("My Gather Point")
+		fmt.Fprintf(g.myGatherPoint, "No gather point created.")
+
+		table := cview.NewTable().
+			SetFixed(1, 0).
+			SetSelectable(true, false)
+		tableCell := cview.NewTableCell("ID").
+			SetTextColor(tcell.ColorYellow).
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(1, 0, tableCell)
+		tableCell = cview.NewTableCell("Players needed").
+			SetTextColor(tcell.ColorYellow).
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(1, 1, tableCell)
+		tableCell = cview.NewTableCell("Joined").
+			SetTextColor(tcell.ColorYellow).
+			SetAlign(cview.AlignCenter).
+			SetExpansion(1)
+		table.SetCell(1, 2, tableCell)
+		g.gameList = table
+		g.gameList.SetSelectedFunc(func(row, column int) {
+			if row == 1 {
+				return
+			}
+			ID := g.gameList.GetCell(row, 0).Text
+			msg := g.gatherPoints[ID]
+			ctx := context.Background()
+			err := g.h.JoinGatherPoint(ctx, msg.ConnectTo)
+			if err != nil {
+				log.Err(err).Msg("Join gather point")
+			}
+			// cell := table.GetCell(row, 2)
+			// cell.Text = "✔️"
+			g.gameList.GetCell(row, 2).SetText("〇")
+		})
+
+		g.newGame = cview.NewInputField().
+			SetLabel("Enter the maximum number of players ").
+			SetFieldWidth(0).
+			SetFieldBackgroundColor(tcell.ColorBlack).
+			SetAcceptanceFunc(cview.InputFieldInteger)
+
+		g.newGame.SetDoneFunc(func(key tcell.Key) {
+			if key != tcell.KeyEnter {
+				// we don't want to do anything if they just tabbed away
+				return
+			}
+			g.maxPlayers, _ = strconv.Atoi(g.newGame.GetText())
+			err := g.h.CreateGatherPoint(g.maxPlayers, time.Second)
+			if err != nil {
+				log.Err(err).Msg("New gather point")
+			}
+			g.myGatherPoint.Clear()
+			fmt.Fprintf(g.myGatherPoint, "Max # of players: %d", g.maxPlayers)
+			g.flex.RemoveItem(g.newGame)
+		})
+
+		g.createBtn = cview.NewButton("Create gather point").SetSelectedFunc(func() {
+			g.flex.RemoveItem(g.createBtn)
+			g.flex.AddItem(g.newGame, 0, 1, false)
+		})
+
+		g.flex = cview.NewFlex().
+			SetDirection(cview.FlexRow).
+			AddItem(g.myGatherPoint, 3, 1, false).
+			AddItem(g.gameList, 0, 3, false).
+			AddItem(g.createBtn, 2, 1, false)
+
+	*/
 }
 
 func (g *GatherUI) eventLoop() {
